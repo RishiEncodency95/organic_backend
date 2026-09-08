@@ -13,6 +13,8 @@ import {
 } from "./auth.service";
 import { env } from "../../config/env";
 import jwt from "jsonwebtoken";
+import { Admin } from "../../models/Admin.model";
+import { ApiError } from "../../utils/ApiError";
 
 const COOKIE_OPTIONS = {
   httpOnly: true,                        // Prevent client-side JS access (XSS protection)
@@ -155,7 +157,20 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
 
 // GET /api/auth/me (protected)
 export const getMe = asyncHandler(async (req: Request, res: Response) => {
+  const admin = await Admin.findById(req.user!.id);
+  if (!admin) {
+    throw ApiError.unauthorized("User not found");
+  }
+
   res.status(200).json(
-    new ApiResponse(200, "Current user", { user: req.user })
+    new ApiResponse(200, "Current user", {
+      user: {
+        id: admin._id,
+        name: admin.name,
+        email: admin.email,
+        role: admin.role,
+        isTwoFactorEnabled: admin.isTwoFactorEnabled,
+      },
+    })
   );
 });
