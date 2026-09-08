@@ -47,6 +47,7 @@ export const setCache = async <T>(
   data: T,
   ttlSeconds: number = 300
 ): Promise<void> => {
+  if (!redisConnected) return;
   try {
     await redisClient.setex(key, ttlSeconds, JSON.stringify(data));
   } catch (error) {
@@ -60,6 +61,7 @@ export const setCache = async <T>(
  * @returns Parsed data or null if cache miss
  */
 export const getCache = async <T>(key: string): Promise<T | null> => {
+  if (!redisConnected) return null;
   try {
     const data = await redisClient.get(key);
     if (!data) return null;
@@ -75,6 +77,7 @@ export const getCache = async <T>(key: string): Promise<T | null> => {
  * @param key - Specific key or pattern (e.g., "dashboard:*")
  */
 export const deleteCache = async (key: string): Promise<void> => {
+  if (!redisConnected) return;
   try {
     if (key.includes("*")) {
       const keys = await redisClient.keys(key);
@@ -93,6 +96,7 @@ export const deleteCache = async (key: string): Promise<void> => {
  * Check if a key exists in cache
  */
 export const cacheExists = async (key: string): Promise<boolean> => {
+  if (!redisConnected) return false;
   try {
     const result = await redisClient.exists(key);
     return result === 1;

@@ -6,6 +6,7 @@ import {
   inviteStaffService,
   updateStaffService,
   updateStaffStatusService,
+  deleteStaffService,
 } from "./staff.service";
 
 export const getStaffList = asyncHandler(async (_req: Request, res: Response) => {
@@ -29,4 +30,10 @@ export const updateStaffStatus = asyncHandler(async (req: Request, res: Response
   const { status } = req.body;
   const updated = await updateStaffStatusService(id, status);
   res.status(200).json(new ApiResponse(200, "Staff status updated", updated));
+});
+
+export const deleteStaff = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const result = await deleteStaffService(id);
+  res.status(200).json(new ApiResponse(200, "Staff account deleted", result));
 });

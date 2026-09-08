@@ -60,6 +60,38 @@ export const loginService = async (data: LoginInput) => {
 
   // Check 2FA status
   if (admin.isTwoFactorEnabled) {
+    if (data.totpCode) {
+      const isValid = speakeasy.totp.verify({
+        secret: admin.twoFactorSecret || "",
+        encoding: "base32",
+        token: data.totpCode,
+        window: 1,
+      });
+
+      if (!isValid) {
+        throw ApiError.unauthorized("Invalid 2FA code from Microsoft Authenticator");
+      }
+
+      await admin.resetLoginAttempts();
+      const accessToken = generateAccessToken(admin._id.toString(), admin.role);
+      const refreshToken = generateRefreshToken(admin._id.toString());
+
+      logger.info(`Admin logged in with 2FA: ${admin.email}`);
+
+      return {
+        requiresTwoFactor: false,
+        twoFactorSetupRequired: false,
+        accessToken,
+        refreshToken,
+        admin: {
+          id: admin._id,
+          name: admin.name,
+          email: admin.email,
+          role: admin.role,
+        },
+      };
+    }
+
     const tempToken = jwt.sign(
       { id: admin._id, step: "2fa" },
       env.ACCESS_TOKEN_SECRET,
@@ -210,4 +242,67 @@ export const logoutService = async (
   // Blacklist token in Redis until access token expiration (15 minutes)
   await setCache(`blacklist:${accessToken}`, "1", 15 * 60);
   logger.info("Admin logged out — tokens blacklisted");
+};
+
+export const refreshTokenService = async (token: string) => {
+  if (!token) {
+    throw ApiError.unauthorized("Refresh token missing");
+  }
+
+  let decoded: { id: string };
+  try {
+    decoded = jwt.verify(token, env.REFRESH_TOKEN_SECRET) as { id: string };
+  } catch {
+    throw ApiError.unauthorized("Invalid or expired refresh token");
+  }
+
+  const admin = await Admin.findById(decoded.id);
+  if (!admin || !admin.isActive) {
+    throw ApiError.unauthorized("User account not found or inactive");
+  }
+
+  const accessToken = generateAccessToken(admin._id.toString(), admin.role);
+  const newRefreshToken = generateRefreshToken(admin._id.toString());
+
+  return { accessToken, refreshToken: newRefreshToken };
+};
+
+export const forgotPasswordService = async (email: string) => {
+  const admin = await Admin.findOne({ email: email.toLowerCase() });
+  if (!admin) {
+    return { success: true, message: "If this email is registered, reset instructions have been sent." };
+  }
+
+  const resetToken = jwt.sign(
+    { id: admin._id, type: "password_reset" },
+    env.ACCESS_TOKEN_SECRET,
+    { expiresIn: "15m" }
+  );
+
+  logger.info(`Password reset requested for ${admin.email}. Reset token created.`);
+  return { success: true, resetToken };
+};
+
+export const resetPasswordService = async (token: string, newPass: string) => {
+  let decoded: { id: string; type: string };
+  try {
+    decoded = jwt.verify(token, env.ACCESS_TOKEN_SECRET) as { id: string; type: string };
+  } catch {
+    throw ApiError.unauthorized("Invalid or expired reset token");
+  }
+
+  if (decoded.type !== "password_reset") {
+    throw ApiError.unauthorized("Invalid token type");
+  }
+
+  const admin = await Admin.findById(decoded.id).select("+password");
+  if (!admin) {
+    throw ApiError.notFound("Admin not found");
+  }
+
+  admin.password = newPass;
+  await admin.save();
+
+  logger.info(`Password reset successfully for ${admin.email}`);
+  return { success: true, message: "Password reset successfully" };
 };

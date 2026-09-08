@@ -18,12 +18,25 @@ const app = express();
 app.use(helmet());
 
 // CORS configuration — allow frontend origin
+const allowedOrigins = [
+  env.ALLOWED_ORIGIN,
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:5173",
+];
+
 app.use(
   cors({
-    origin: env.ALLOWED_ORIGIN,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(null, true); // Permissive in development
+      }
+    },
     credentials: true, // Allow cookies
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
   })
 );
 
@@ -64,12 +77,14 @@ app.use(
 );
 
 // ─── Rate Limiting ────────────────────────────────────────────────────────────
-
+ 
 app.use("/api", apiLimiter);
+app.use("/api/v1", apiLimiter);
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
 app.use("/api", router);
+app.use("/api/v1", router);
 
 // 404 Handler
 app.use((req, res) => {

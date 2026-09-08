@@ -5,7 +5,7 @@ import { ApiError } from "../utils/ApiError";
 export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5,
-  message: new ApiError(429, "Too many login attempts. Try again in 15 minutes."),
+  message: new ApiError(429, "Account temporarily locked. Too many failed login attempts. Please try again in 15 minutes."),
   standardHeaders: true,
   legacyHeaders: false,
 });
