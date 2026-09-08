@@ -1,6 +1,7 @@
 import app from "./src/app";
 import { connectDB } from "./src/config/db";
 import { connectRedis, isRedisConnected } from "./src/config/redis";
+import { isCloudinaryConfigured } from "./src/config/cloudinary";
 import { env } from "./src/config/env";
 import { logger } from "./src/utils/logger";
 
@@ -13,14 +14,20 @@ const startServer = async (): Promise<void> => {
     const server = app.listen(env.PORT, () => {
       // ─── Startup Status ───────────────────────────────
       console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-      console.log("  🚀  Server  : http://localhost:" + env.PORT);
-      console.log("  🍃  MongoDB : ✅ Connected");
+      console.log("  🚀  Server     : http://localhost:" + env.PORT);
+      console.log("  🍃  MongoDB    : ✅ Connected");
 
       if (isRedisConnected()) {
-        console.log("  ⚡  Redis   : ✅ Connected — Cache Active");
+        console.log("  ⚡  Redis      : ✅ Connected — Cache Active");
       } else {
-        console.log("  ⚡  Redis   : ❌ Not Running");
-        console.log("  💡  Tip     : Run redis-server before testing data");
+        console.log("  ⚡  Redis      : ❌ Not Running");
+        console.log("  💡  Tip        : Run redis-server before testing data");
+      }
+
+      if (isCloudinaryConfigured()) {
+        console.log("  ☁️   Cloudinary : ✅ Connected (" + (process.env.CLOUDINARY_CLOUD_NAME || "Active") + ")");
+      } else {
+        console.log("  ☁️   Cloudinary : ❌ Not Configured");
       }
 
       console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
