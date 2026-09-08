@@ -43,8 +43,6 @@ export const inviteStaffService = async (data: InviteStaffDTO) => {
   const randomNum = Math.floor(1000 + Math.random() * 9000);
   const temporaryPassword = `OrgExpo#${randomNum}`;
 
-  const hashedPassword = await argon2.hash(temporaryPassword);
-
   const role = roleId === "role_superadmin" ? "superadmin" : "admin";
 
   const newAdmin = await Admin.create({
@@ -52,7 +50,7 @@ export const inviteStaffService = async (data: InviteStaffDTO) => {
     email: email.toLowerCase(),
     phone: phone || "",
     employeeId: employeeId || `EMP-${randomNum}`,
-    password: hashedPassword,
+    password: temporaryPassword,
     role,
     avatarUrl: avatarUrl || "",
     isTwoFactorEnabled: false, // 2FA mandatory on first login!
