@@ -1,0 +1,129 @@
+import { Admin } from "../../models/Admin.model";
+import { ApiError } from "../../utils/ApiError";
+import { logger } from "../../utils/logger";
+import argon2 from "argon2";
+import crypto from "crypto";
+
+export interface InviteStaffDTO {
+  name: string;
+  email: string;
+  phone?: string;
+  employeeId?: string;
+  roleId?: string;
+  avatarUrl?: string;
+}
+
+export const listStaffService = async () => {
+  const staff = await Admin.find().sort({ createdAt: -1 });
+
+  return staff.map((member) => ({
+    _id: member._id.toString(),
+    name: member.name,
+    email: member.email,
+    phone: member.phone || "",
+    employeeId: member.employeeId || `EMP-${member._id.toString().slice(-4).toUpperCase()}`,
+    roleId: member.role === "superadmin" ? "role_superadmin" : "role_admin",
+    roleName: member.role === "superadmin" ? "Super Admin" : "Admin",
+    status: member.isActive ? "ACTIVE" : "INACTIVE",
+    avatarUrl: member.avatarUrl || null,
+    lastLoginAt: member.lastLogin ? member.lastLogin.toISOString() : null,
+    createdAt: member.createdAt ? member.createdAt.toISOString() : new Date().toISOString(),
+  }));
+};
+
+export const inviteStaffService = async (data: InviteStaffDTO) => {
+  const { name, email, phone, employeeId, roleId, avatarUrl } = data;
+
+  const existingEmail = await Admin.findOne({ email: email.toLowerCase() });
+  if (existingEmail) {
+    throw ApiError.badRequest("Staff account with this email already exists.");
+  }
+
+  // Generate temporary password (e.g. OrgExpo#9284)
+  const randomNum = Math.floor(1000 + Math.random() * 9000);
+  const temporaryPassword = `OrgExpo#${randomNum}`;
+
+  const hashedPassword = await argon2.hash(temporaryPassword);
+
+  const role = roleId === "role_superadmin" ? "superadmin" : "admin";
+
+  const newAdmin = await Admin.create({
+    name,
+    email: email.toLowerCase(),
+    phone: phone || "",
+    employeeId: employeeId || `EMP-${randomNum}`,
+    password: hashedPassword,
+    role,
+    avatarUrl: avatarUrl || "",
+    isTwoFactorEnabled: false, // 2FA mandatory on first login!
+    isActive: true,
+  });
+
+  logger.info(`New staff account created: ${newAdmin.email} (Emp ID: ${newAdmin.employeeId})`);
+
+  return {
+    user: {
+      _id: newAdmin._id.toString(),
+      name: newAdmin.name,
+      email: newAdmin.email,
+      phone: newAdmin.phone,
+      employeeId: newAdmin.employeeId,
+      roleId: newAdmin.role === "superadmin" ? "role_superadmin" : "role_admin",
+      roleName: newAdmin.role === "superadmin" ? "Super Admin" : "Admin",
+      status: "ACTIVE",
+      avatarUrl: newAdmin.avatarUrl || null,
+      createdAt: newAdmin.createdAt.toISOString(),
+    },
+    temporaryPassword,
+  };
+};
+
+export const updateStaffService = async (id: string, data: Partial<InviteStaffDTO>) => {
+  const admin = await Admin.findById(id);
+  if (!admin) {
+    throw ApiError.notFound("Staff member not found.");
+  }
+
+  if (data.name) admin.name = data.name;
+  if (data.email) admin.email = data.email.toLowerCase();
+  if (data.phone !== undefined) admin.phone = data.phone;
+  if (data.employeeId !== undefined) admin.employeeId = data.employeeId;
+  if (data.avatarUrl !== undefined) admin.avatarUrl = data.avatarUrl;
+  if (data.roleId) {
+    admin.role = data.roleId === "role_superadmin" ? "superadmin" : "admin";
+  }
+
+  await admin.save();
+
+  return {
+    _id: admin._id.toString(),
+    name: admin.name,
+    email: admin.email,
+    phone: admin.phone || "",
+    employeeId: admin.employeeId || "",
+    roleId: admin.role === "superadmin" ? "role_superadmin" : "role_admin",
+    roleName: admin.role === "superadmin" ? "Super Admin" : "Admin",
+    status: admin.isActive ? "ACTIVE" : "INACTIVE",
+    avatarUrl: admin.avatarUrl || null,
+  };
+};
+
+export const updateStaffStatusService = async (id: string, status: "ACTIVE" | "INACTIVE" | "LOCKED") => {
+  const admin = await Admin.findById(id);
+  if (!admin) {
+    throw ApiError.notFound("Staff member not found.");
+  }
+
+  admin.isActive = status === "ACTIVE";
+  if (status === "ACTIVE") {
+    admin.lockUntil = undefined;
+    admin.loginAttempts = 0;
+  }
+
+  await admin.save();
+
+  return {
+    _id: admin._id.toString(),
+    status: admin.isActive ? "ACTIVE" : "INACTIVE",
+  };
+};
