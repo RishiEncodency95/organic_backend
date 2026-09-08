@@ -125,3 +125,13 @@ export const updateStaffStatusService = async (id: string, status: "ACTIVE" | "I
     status: admin.isActive ? "ACTIVE" : "INACTIVE",
   };
 };
+export const deleteStaffService = async (id: string) => {
+  const admin = await Admin.findById(id);
+  if (!admin) throw new ApiError(404, "Staff member not found.");
+  if (admin.role === "superadmin") {
+    const superAdminCount = await Admin.countDocuments({ role: "superadmin" });
+    if (superAdminCount <= 1) throw new ApiError(400, "Cannot delete the last Super Admin account.");
+  }
+  await Admin.findByIdAndDelete(id);
+  return { deleted: true };
+};

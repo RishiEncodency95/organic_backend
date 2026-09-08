@@ -4,6 +4,7 @@ import {
   inviteStaff,
   updateStaff,
   updateStaffStatus,
+  deleteStaff,
 } from "./staff.controller";
 import { protect } from "../../middlewares/auth.middleware";
 
@@ -15,5 +16,6 @@ router.get("/staff", getStaffList);
 router.post("/staff", inviteStaff);
 router.patch("/staff/:id", updateStaff);
 router.patch("/staff/:id/status", updateStaffStatus);
+router.delete("/staff/:id", deleteStaff);
 
 export default router;
