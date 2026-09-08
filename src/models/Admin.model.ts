@@ -119,15 +119,24 @@ adminSchema.methods.comparePassword = async function (
 
 // Check if account is currently locked
 adminSchema.methods.isLocked = function (): boolean {
-  return !!(this.lockUntil && this.lockUntil > new Date());
+  if (this.lockUntil && new Date(this.lockUntil) <= new Date()) {
+    return false;
+  }
+  return !!(this.lockUntil && new Date(this.lockUntil) > new Date());
 };
 
 // Increment failed login attempts
 adminSchema.methods.incrementLoginAttempts = async function (): Promise<void> {
   const MAX_ATTEMPTS = 5;
-  const LOCK_DURATION = 30 * 60 * 1000; // 30 minutes
+  const LOCK_DURATION = 15 * 60 * 1000; // 15 minutes
 
-  this.loginAttempts += 1;
+  // If previous lock has expired, reset counter first
+  if (this.lockUntil && new Date(this.lockUntil) <= new Date()) {
+    this.loginAttempts = 0;
+    this.lockUntil = undefined;
+  }
+
+  this.loginAttempts = (this.loginAttempts || 0) + 1;
 
   if (this.loginAttempts >= MAX_ATTEMPTS) {
     this.lockUntil = new Date(Date.now() + LOCK_DURATION);

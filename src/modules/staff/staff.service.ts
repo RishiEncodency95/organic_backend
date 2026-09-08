@@ -16,19 +16,25 @@ export interface InviteStaffDTO {
 export const listStaffService = async () => {
   const staff = await Admin.find().sort({ createdAt: -1 });
 
-  return staff.map((member) => ({
-    _id: member._id.toString(),
-    name: member.name,
-    email: member.email,
-    phone: member.phone || "",
-    employeeId: member.employeeId || `EMP-${member._id.toString().slice(-4).toUpperCase()}`,
-    roleId: member.role === "superadmin" ? "role_superadmin" : "role_admin",
-    roleName: member.role === "superadmin" ? "Super Admin" : "Admin",
-    status: member.isActive ? "ACTIVE" : "INACTIVE",
-    avatarUrl: member.avatarUrl || null,
-    lastLoginAt: member.lastLogin ? member.lastLogin.toISOString() : null,
-    createdAt: member.createdAt ? member.createdAt.toISOString() : new Date().toISOString(),
-  }));
+  return staff.map((member) => {
+    const isLocked = !!(member.lockUntil && new Date(member.lockUntil) > new Date());
+    const status = isLocked ? "LOCKED" : member.isActive ? "ACTIVE" : "INACTIVE";
+
+    return {
+      _id: member._id.toString(),
+      name: member.name,
+      email: member.email,
+      phone: member.phone || "",
+      employeeId: member.employeeId || `EMP-${member._id.toString().slice(-4).toUpperCase()}`,
+      roleId: member.role === "superadmin" ? "role_superadmin" : "role_admin",
+      roleName: member.role === "superadmin" ? "Super Admin" : "Admin",
+      status,
+      lockUntil: member.lockUntil ? member.lockUntil.toISOString() : null,
+      avatarUrl: member.avatarUrl || null,
+      lastLoginAt: member.lastLogin ? member.lastLogin.toISOString() : null,
+      createdAt: member.createdAt ? member.createdAt.toISOString() : new Date().toISOString(),
+    };
+  });
 };
 
 export const inviteStaffService = async (data: InviteStaffDTO) => {
@@ -112,17 +118,27 @@ export const updateStaffStatusService = async (id: string, status: "ACTIVE" | "I
     throw ApiError.notFound("Staff member not found.");
   }
 
-  admin.isActive = status === "ACTIVE";
   if (status === "ACTIVE") {
+    admin.isActive = true;
     admin.lockUntil = undefined;
     admin.loginAttempts = 0;
+  } else if (status === "INACTIVE") {
+    admin.isActive = false;
+    admin.lockUntil = undefined;
+  } else if (status === "LOCKED") {
+    admin.isActive = true;
+    admin.loginAttempts = 5;
+    admin.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
   }
 
   await admin.save();
 
+  const isLocked = !!(admin.lockUntil && new Date(admin.lockUntil) > new Date());
+
   return {
     _id: admin._id.toString(),
-    status: admin.isActive ? "ACTIVE" : "INACTIVE",
+    status: isLocked ? "LOCKED" : admin.isActive ? "ACTIVE" : "INACTIVE",
+    lockUntil: admin.lockUntil ? admin.lockUntil.toISOString() : null,
   };
 };
 export const deleteStaffService = async (id: string) => {

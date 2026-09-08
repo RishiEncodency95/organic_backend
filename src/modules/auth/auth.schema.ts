@@ -29,7 +29,7 @@ export const setup2FASchema = z.object({
 
 export const forgotPasswordSchema = z.object({
   body: z.object({
-    email: z.string().email("Valid email is required"),
+    email: z.string().min(1, "Email, mobile, or staff ID is required"),
   }),
 });
 
