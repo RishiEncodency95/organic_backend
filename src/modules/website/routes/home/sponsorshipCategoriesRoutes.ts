@@ -21,13 +21,15 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
-router.get('/', (req, res) => sponsorshipCategoriesController.getSponsorshipCategories(req, res));
-
 const uploadFields = [
     { name: 'image', maxCount: 1 },
     { name: 'brochure', maxCount: 1 }
 ];
 
-router.post('/', upload.fields(uploadFields), (req, res) => sponsorshipCategoriesController.updateSponsorshipCategories(req, res));
+router.post('/', upload.fields(uploadFields), (req, res) => sponsorshipCategoriesController.createSponsorshipCategories(req, res));
+router.get('/', (req, res) => sponsorshipCategoriesController.getAllSponsorshipCategories(req, res));
+router.get('/:id', (req, res) => sponsorshipCategoriesController.getSponsorshipCategoriesById(req, res));
+router.put('/:id', upload.fields(uploadFields), (req, res) => sponsorshipCategoriesController.updateSponsorshipCategoriesById(req, res));
+router.delete('/:id', (req, res) => sponsorshipCategoriesController.deleteSponsorshipCategoriesById(req, res));
 
 export default router;

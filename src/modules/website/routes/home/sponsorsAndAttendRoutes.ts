@@ -5,10 +5,10 @@ import fs from "fs";
 const router = Router();
 import * as sponsorsAndAttendController from "../../controllers/home/sponsorsAndAttendController";
 
-// @route   GET /api/organic/sponsors-and-attend
-router.get('/', (req, res) => sponsorsAndAttendController.getSponsorsAndAttend(req, res));
-
-// @route   POST /api/organic/sponsors-and-attend
-router.post('/', (req, res) => sponsorsAndAttendController.updateSponsorsAndAttend(req, res));
+router.post('/', (req, res) => sponsorsAndAttendController.createSponsorsAndAttend(req, res));
+router.get('/', (req, res) => sponsorsAndAttendController.getAllSponsorsAndAttend(req, res));
+router.get('/:id', (req, res) => sponsorsAndAttendController.getSponsorsAndAttendById(req, res));
+router.put('/:id', (req, res) => sponsorsAndAttendController.updateSponsorsAndAttendById(req, res));
+router.delete('/:id', (req, res) => sponsorsAndAttendController.deleteSponsorsAndAttendById(req, res));
 
 export default router;

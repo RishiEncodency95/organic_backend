@@ -21,10 +21,10 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-router.get('/', (req, res) => globalPlatformController.getGlobalPlatform(req, res));
-
-// We accept up to 10 icons for flexibility
-const uploadFields = Array.from({ length: 10 }).map((_, i) => ({ name: `icon${i}`, maxCount: 1 }));
-router.post('/', upload.fields(uploadFields), (req, res) => globalPlatformController.updateGlobalPlatform(req, res));
+router.post('/', upload.any(), (req, res) => globalPlatformController.createGlobalPlatform(req, res));
+router.get('/', (req, res) => globalPlatformController.getAllGlobalPlatform(req, res));
+router.get('/:id', (req, res) => globalPlatformController.getGlobalPlatformById(req, res));
+router.put('/:id', upload.any(), (req, res) => globalPlatformController.updateGlobalPlatformById(req, res));
+router.delete('/:id', (req, res) => globalPlatformController.deleteGlobalPlatformById(req, res));
 
 export default router;

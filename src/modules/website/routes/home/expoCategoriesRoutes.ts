@@ -21,10 +21,10 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for image
 });
 
-router.get('/', (req, res) => expoCategoriesController.getExpoCategories(req, res));
-
-// We accept up to 20 images just in case
-const uploadFields = Array.from({ length: 20 }).map((_, i) => ({ name: `categoryImage${i}`, maxCount: 1 }));
-router.post('/', upload.fields(uploadFields), (req, res) => expoCategoriesController.updateExpoCategories(req, res));
+router.post('/', upload.any(), (req, res) => expoCategoriesController.createExpoCategories(req, res));
+router.get('/', (req, res) => expoCategoriesController.getAllExpoCategories(req, res));
+router.get('/:id', (req, res) => expoCategoriesController.getExpoCategoriesById(req, res));
+router.put('/:id', upload.any(), (req, res) => expoCategoriesController.updateExpoCategoriesById(req, res));
+router.delete('/:id', (req, res) => expoCategoriesController.deleteExpoCategoriesById(req, res));
 
 export default router;

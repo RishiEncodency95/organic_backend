@@ -21,13 +21,15 @@ const upload = multer({
     limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for brochure
 });
 
-router.get('/', (req, res) => whyParticipateController.getWhyParticipate(req, res));
-
 const uploadFields = [
     { name: 'image', maxCount: 1 },
     { name: 'brochure', maxCount: 1 }
 ];
 
-router.post('/', upload.fields(uploadFields), (req, res) => whyParticipateController.updateWhyParticipate(req, res));
+router.post('/', upload.fields(uploadFields), (req, res) => whyParticipateController.createWhyParticipate(req, res));
+router.get('/', (req, res) => whyParticipateController.getAllWhyParticipate(req, res));
+router.get('/:id', (req, res) => whyParticipateController.getWhyParticipateById(req, res));
+router.put('/:id', upload.fields(uploadFields), (req, res) => whyParticipateController.updateWhyParticipateById(req, res));
+router.delete('/:id', (req, res) => whyParticipateController.deleteWhyParticipateById(req, res));
 
 export default router;

@@ -21,10 +21,10 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
 
-// @route   GET /api/organic/home-hero
-router.get('/', (req, res) => homeHeroController.getHomeHero(req, res));
-
-// @route   POST /api/organic/home-hero
-router.post('/', upload.single('img'), (req, res) => homeHeroController.updateHomeHero(req, res));
+router.post('/', upload.single('img'), (req, res) => homeHeroController.createHomeHero(req, res));
+router.get('/', (req, res) => homeHeroController.getAllHomeHero(req, res));
+router.get('/:id', (req, res) => homeHeroController.getHomeHeroById(req, res));
+router.put('/:id', upload.single('img'), (req, res) => homeHeroController.updateHomeHeroById(req, res));
+router.delete('/:id', (req, res) => homeHeroController.deleteHomeHeroById(req, res));
 
 export default router;

@@ -21,12 +21,14 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for image
 });
 
-router.get('/', (req, res) => conferenceSeminarsController.getConferenceSeminars(req, res));
-
 const uploadFields = [
     { name: 'image', maxCount: 1 }
 ];
 
-router.post('/', upload.fields(uploadFields), (req, res) => conferenceSeminarsController.updateConferenceSeminars(req, res));
+router.post('/', upload.fields(uploadFields), (req, res) => conferenceSeminarsController.createConferenceSeminars(req, res));
+router.get('/', (req, res) => conferenceSeminarsController.getAllConferenceSeminars(req, res));
+router.get('/:id', (req, res) => conferenceSeminarsController.getConferenceSeminarsById(req, res));
+router.put('/:id', upload.fields(uploadFields), (req, res) => conferenceSeminarsController.updateConferenceSeminarsById(req, res));
+router.delete('/:id', (req, res) => conferenceSeminarsController.deleteConferenceSeminarsById(req, res));
 
 export default router;

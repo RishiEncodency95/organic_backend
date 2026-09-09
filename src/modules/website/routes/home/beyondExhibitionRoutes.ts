@@ -21,12 +21,14 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for image
 });
 
-router.get('/', (req, res) => beyondExhibitionController.getBeyondExhibition(req, res));
-
 const uploadFields = [
     { name: 'image', maxCount: 1 }
 ];
 
-router.post('/', upload.fields(uploadFields), (req, res) => beyondExhibitionController.updateBeyondExhibition(req, res));
+router.post('/', upload.fields(uploadFields), (req, res) => beyondExhibitionController.createBeyondExhibition(req, res));
+router.get('/', (req, res) => beyondExhibitionController.getAllBeyondExhibition(req, res));
+router.get('/:id', (req, res) => beyondExhibitionController.getBeyondExhibitionById(req, res));
+router.put('/:id', upload.fields(uploadFields), (req, res) => beyondExhibitionController.updateBeyondExhibitionById(req, res));
+router.delete('/:id', (req, res) => beyondExhibitionController.deleteBeyondExhibitionById(req, res));
 
 export default router;

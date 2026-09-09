@@ -21,12 +21,14 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
 
-router.get('/', (req, res) => buyerSellerMeetController.getBuyerSellerMeet(req, res));
-
 const uploadFields = [
     { name: 'image', maxCount: 1 }
 ];
 
-router.post('/', upload.fields(uploadFields), (req, res) => buyerSellerMeetController.updateBuyerSellerMeet(req, res));
+router.post('/', upload.fields(uploadFields), (req, res) => buyerSellerMeetController.createBuyerSellerMeet(req, res));
+router.get('/', (req, res) => buyerSellerMeetController.getAllBuyerSellerMeet(req, res));
+router.get('/:id', (req, res) => buyerSellerMeetController.getBuyerSellerMeetById(req, res));
+router.put('/:id', upload.fields(uploadFields), (req, res) => buyerSellerMeetController.updateBuyerSellerMeetById(req, res));
+router.delete('/:id', (req, res) => buyerSellerMeetController.deleteBuyerSellerMeetById(req, res));
 
 export default router;

@@ -21,9 +21,10 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit per image
 });
 
-router.get('/', (req, res) => homeVideosController.getVideos(req, res));
-
-// Use upload.any() because we have dynamic array field names like thumbnail_0, thumbnail_1, etc.
-router.post('/', upload.any(), (req, res) => homeVideosController.updateVideos(req, res));
+router.post('/', upload.any(), (req, res) => homeVideosController.createVideos(req, res));
+router.get('/', (req, res) => homeVideosController.getAllVideos(req, res));
+router.get('/:id', (req, res) => homeVideosController.getVideosById(req, res));
+router.put('/:id', upload.any(), (req, res) => homeVideosController.updateVideosById(req, res));
+router.delete('/:id', (req, res) => homeVideosController.deleteVideosById(req, res));
 
 export default router;

@@ -5,10 +5,10 @@ import fs from "fs";
 const router = Router();
 import * as testimonialsCarouselController from "../../controllers/home/testimonialsCarouselController";
 
-// @route   GET /api/organic/testimonials-carousel
-router.get('/', (req, res) => testimonialsCarouselController.getTestimonials(req, res));
-
-// @route   POST /api/organic/testimonials-carousel
-router.post('/', (req, res) => testimonialsCarouselController.updateTestimonials(req, res));
+router.post('/', (req, res) => testimonialsCarouselController.createTestimonials(req, res));
+router.get('/', (req, res) => testimonialsCarouselController.getAllTestimonials(req, res));
+router.get('/:id', (req, res) => testimonialsCarouselController.getTestimonialsById(req, res));
+router.put('/:id', (req, res) => testimonialsCarouselController.updateTestimonialsById(req, res));
+router.delete('/:id', (req, res) => testimonialsCarouselController.deleteTestimonialsById(req, res));
 
 export default router;

@@ -21,9 +21,10 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit per image
 });
 
-router.get('/', (req, res) => partnersAndBrandsController.getPartnersAndBrands(req, res));
-
-// Use upload.any() because we have dynamic array field names like industryLeadersLogos_0, knowledgeLogos_2, etc.
-router.post('/', upload.any(), (req, res) => partnersAndBrandsController.updatePartnersAndBrands(req, res));
+router.post('/', upload.any(), (req, res) => partnersAndBrandsController.createPartnersAndBrands(req, res));
+router.get('/', (req, res) => partnersAndBrandsController.getAllPartnersAndBrands(req, res));
+router.get('/:id', (req, res) => partnersAndBrandsController.getPartnersAndBrandsById(req, res));
+router.put('/:id', upload.any(), (req, res) => partnersAndBrandsController.updatePartnersAndBrandsById(req, res));
+router.delete('/:id', (req, res) => partnersAndBrandsController.deletePartnersAndBrandsById(req, res));
 
 export default router;

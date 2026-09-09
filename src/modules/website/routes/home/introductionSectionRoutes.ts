@@ -21,7 +21,10 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-router.get('/', (req, res) => introController.getIntroduction(req, res));
-router.post('/', upload.single('image'), (req, res) => introController.updateIntroduction(req, res));
+router.post('/', upload.single('image'), (req, res) => introController.createIntroduction(req, res));
+router.get('/', (req, res) => introController.getAllIntroduction(req, res));
+router.get('/:id', (req, res) => introController.getIntroductionById(req, res));
+router.put('/:id', upload.single('image'), (req, res) => introController.updateIntroductionById(req, res));
+router.delete('/:id', (req, res) => introController.deleteIntroductionById(req, res));
 
 export default router;

@@ -21,12 +21,14 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for image
 });
 
-router.get('/', (req, res) => becomeSponsorController.getBecomeSponsor(req, res));
-
 const uploadFields = [
     { name: 'image', maxCount: 1 }
 ];
 
-router.post('/', upload.fields(uploadFields), (req, res) => becomeSponsorController.updateBecomeSponsor(req, res));
+router.post('/', upload.fields(uploadFields), (req, res) => becomeSponsorController.createBecomeSponsor(req, res));
+router.get('/', (req, res) => becomeSponsorController.getAllBecomeSponsor(req, res));
+router.get('/:id', (req, res) => becomeSponsorController.getBecomeSponsorById(req, res));
+router.put('/:id', upload.fields(uploadFields), (req, res) => becomeSponsorController.updateBecomeSponsorById(req, res));
+router.delete('/:id', (req, res) => becomeSponsorController.deleteBecomeSponsorById(req, res));
 
 export default router;
