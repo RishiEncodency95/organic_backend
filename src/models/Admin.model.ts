@@ -9,6 +9,8 @@ export interface IAdmin extends Document {
   avatarUrl?: string;
   password: string;
   role: "superadmin" | "admin";
+  roleId?: string;
+  roleName?: string;
   twoFactorSecret?: string;
   isTwoFactorEnabled: boolean;
   loginAttempts: number;
@@ -62,6 +64,14 @@ const adminSchema = new Schema<IAdmin>(
       type: String,
       enum: ["superadmin", "admin"],
       default: "admin",
+    },
+    roleId: {
+      type: String,
+      trim: true,
+    },
+    roleName: {
+      type: String,
+      trim: true,
     },
     twoFactorSecret: {
       type: String,

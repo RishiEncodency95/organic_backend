@@ -98,6 +98,7 @@ export const loginService = async (data: LoginInput) => {
           name: admin.name,
           email: admin.email,
           role: admin.role,
+          avatarUrl: admin.avatarUrl,
         },
       };
     }
@@ -133,6 +134,7 @@ export const loginService = async (data: LoginInput) => {
       name: admin.name,
       email: admin.email,
       role: admin.role,
+      avatarUrl: admin.avatarUrl,
     },
   };
 };

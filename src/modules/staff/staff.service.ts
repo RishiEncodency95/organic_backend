@@ -1,4 +1,5 @@
 import { Admin } from "../../models/Admin.model";
+import { Role } from "../../models/Role.model";
 import { ApiError } from "../../utils/ApiError";
 import { logger } from "../../utils/logger";
 import argon2 from "argon2";
@@ -14,11 +15,27 @@ export interface InviteStaffDTO {
 }
 
 export const listStaffService = async () => {
-  const staff = await Admin.find().sort({ createdAt: -1 });
+  const [staff, allRoles] = await Promise.all([
+    Admin.find().sort({ createdAt: -1 }),
+    Role.find().lean(),
+  ]);
+  const rolesMap = new Map(allRoles.map((r) => [r._id.toString(), r.name]));
 
   return staff.map((member) => {
     const isLocked = !!(member.lockUntil && new Date(member.lockUntil) > new Date());
     const status = isLocked ? "LOCKED" : member.isActive ? "ACTIVE" : "INACTIVE";
+
+    let roleName = member.roleName || (member.role === "superadmin" ? "Super Admin" : "Expo Admin");
+    let roleId = member.roleId;
+    if (roleId && rolesMap.has(roleId)) {
+      roleName = rolesMap.get(roleId)!;
+    } else {
+      const defaultRole = allRoles.find((r) => r.slug === (member.role === "superadmin" ? "SUPER_ADMIN" : "EXPO_ADMIN"));
+      if (defaultRole) {
+        roleId = defaultRole._id.toString();
+        roleName = defaultRole.name;
+      }
+    }
 
     return {
       _id: member._id.toString(),
@@ -26,8 +43,8 @@ export const listStaffService = async () => {
       email: member.email,
       phone: member.phone || "",
       employeeId: member.employeeId || `EMP-${member._id.toString().slice(-4).toUpperCase()}`,
-      roleId: member.role === "superadmin" ? "role_superadmin" : "role_admin",
-      roleName: member.role === "superadmin" ? "Super Admin" : "Admin",
+      roleId: roleId || (member.role === "superadmin" ? "role_superadmin" : "role_admin"),
+      roleName,
       status,
       lockUntil: member.lockUntil ? member.lockUntil.toISOString() : null,
       avatarUrl: member.avatarUrl || null,
@@ -49,7 +66,23 @@ export const inviteStaffService = async (data: InviteStaffDTO) => {
   const randomNum = Math.floor(1000 + Math.random() * 9000);
   const temporaryPassword = `OrgExpo#${randomNum}`;
 
-  const role = roleId === "role_superadmin" ? "superadmin" : "admin";
+  let assignedRole: "superadmin" | "admin" = "admin";
+  let assignedRoleName = "Expo Admin";
+  let resolvedRoleId = roleId;
+
+  if (roleId) {
+    const roleDoc = await Role.findById(roleId);
+    if (roleDoc) {
+      assignedRoleName = roleDoc.name;
+      if (roleDoc.slug === "SUPER_ADMIN") assignedRole = "superadmin";
+    }
+  } else {
+    const defaultRole = await Role.findOne({ slug: "EXPO_ADMIN" });
+    if (defaultRole) {
+      resolvedRoleId = defaultRole._id.toString();
+      assignedRoleName = defaultRole.name;
+    }
+  }
 
   const newAdmin = await Admin.create({
     name,
@@ -57,7 +90,9 @@ export const inviteStaffService = async (data: InviteStaffDTO) => {
     phone: phone || "",
     employeeId: employeeId || `EMP-${randomNum}`,
     password: temporaryPassword,
-    role,
+    role: assignedRole,
+    roleId: resolvedRoleId,
+    roleName: assignedRoleName,
     avatarUrl: avatarUrl || "",
     isTwoFactorEnabled: false, // 2FA mandatory on first login!
     isActive: true,
@@ -72,8 +107,8 @@ export const inviteStaffService = async (data: InviteStaffDTO) => {
       email: newAdmin.email,
       phone: newAdmin.phone,
       employeeId: newAdmin.employeeId,
-      roleId: newAdmin.role === "superadmin" ? "role_superadmin" : "role_admin",
-      roleName: newAdmin.role === "superadmin" ? "Super Admin" : "Admin",
+      roleId: newAdmin.roleId || (newAdmin.role === "superadmin" ? "role_superadmin" : "role_admin"),
+      roleName: newAdmin.roleName || (newAdmin.role === "superadmin" ? "Super Admin" : "Expo Admin"),
       status: "ACTIVE",
       avatarUrl: newAdmin.avatarUrl || null,
       createdAt: newAdmin.createdAt.toISOString(),
@@ -94,7 +129,12 @@ export const updateStaffService = async (id: string, data: Partial<InviteStaffDT
   if (data.employeeId !== undefined) admin.employeeId = data.employeeId;
   if (data.avatarUrl !== undefined) admin.avatarUrl = data.avatarUrl;
   if (data.roleId) {
-    admin.role = data.roleId === "role_superadmin" ? "superadmin" : "admin";
+    admin.roleId = data.roleId;
+    const roleDoc = await Role.findById(data.roleId);
+    if (roleDoc) {
+      admin.roleName = roleDoc.name;
+      admin.role = roleDoc.slug === "SUPER_ADMIN" ? "superadmin" : "admin";
+    }
   }
 
   await admin.save();
@@ -105,8 +145,8 @@ export const updateStaffService = async (id: string, data: Partial<InviteStaffDT
     email: admin.email,
     phone: admin.phone || "",
     employeeId: admin.employeeId || "",
-    roleId: admin.role === "superadmin" ? "role_superadmin" : "role_admin",
-    roleName: admin.role === "superadmin" ? "Super Admin" : "Admin",
+    roleId: admin.roleId || (admin.role === "superadmin" ? "role_superadmin" : "role_admin"),
+    roleName: admin.roleName || (admin.role === "superadmin" ? "Super Admin" : "Expo Admin"),
     status: admin.isActive ? "ACTIVE" : "INACTIVE",
     avatarUrl: admin.avatarUrl || null,
   };

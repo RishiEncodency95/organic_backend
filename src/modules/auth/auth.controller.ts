@@ -168,6 +168,8 @@ export const getMe = asyncHandler(async (req: Request, res: Response) => {
         id: admin._id,
         name: admin.name,
         email: admin.email,
+        phone: admin.phone,
+        avatarUrl: admin.avatarUrl,
         role: admin.role,
         isTwoFactorEnabled: admin.isTwoFactorEnabled,
       },
