@@ -1,11 +1,11 @@
 import rateLimit from "express-rate-limit";
 import { ApiError } from "../utils/ApiError";
 
-// Rate limiter for login endpoint — 5 attempts per 15 minutes
+// Rate limiter for login endpoint — protect against brute-force DDoS
 export const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
-  message: new ApiError(429, "Account temporarily locked. Too many failed login attempts. Please try again in 15 minutes."),
+  max: 30,
+  message: new ApiError(429, "Too many login attempts from this network. Please try again in 15 minutes."),
   standardHeaders: true,
   legacyHeaders: false,
 });

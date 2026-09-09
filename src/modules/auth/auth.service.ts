@@ -47,7 +47,14 @@ export const loginService = async (data: LoginInput) => {
 
   // Check if account is locked
   if (admin.isLocked()) {
-    throw ApiError.tooManyRequests("Account locked due to too many failed attempts. Try after 30 minutes.");
+    throw ApiError.tooManyRequests("Account temporarily locked. Too many failed login attempts. Please try again in 15 minutes.");
+  }
+
+  // If previous lock has expired, reset counter
+  if (admin.lockUntil && new Date(admin.lockUntil) <= new Date()) {
+    admin.loginAttempts = 0;
+    admin.lockUntil = undefined;
+    await admin.save();
   }
 
   // Verify password
@@ -55,6 +62,9 @@ export const loginService = async (data: LoginInput) => {
 
   if (!isPasswordValid) {
     await admin.incrementLoginAttempts();
+    if (admin.isLocked()) {
+      throw ApiError.tooManyRequests("Account temporarily locked. Too many failed login attempts. Please try again in 15 minutes.");
+    }
     throw ApiError.unauthorized("Invalid email, staff ID, or password");
   }
 
@@ -88,6 +98,7 @@ export const loginService = async (data: LoginInput) => {
           name: admin.name,
           email: admin.email,
           role: admin.role,
+          avatarUrl: admin.avatarUrl,
         },
       };
     }
@@ -123,6 +134,7 @@ export const loginService = async (data: LoginInput) => {
       name: admin.name,
       email: admin.email,
       role: admin.role,
+      avatarUrl: admin.avatarUrl,
     },
   };
 };
@@ -267,10 +279,16 @@ export const refreshTokenService = async (token: string) => {
   return { accessToken, refreshToken: newRefreshToken };
 };
 
-export const forgotPasswordService = async (email: string) => {
-  const admin = await Admin.findOne({ email: email.toLowerCase() });
+export const forgotPasswordService = async (identifier: string) => {
+  const admin = await Admin.findOne({
+    $or: [
+      { email: identifier.toLowerCase() },
+      { phone: identifier },
+      { employeeId: identifier },
+    ],
+  });
   if (!admin) {
-    return { success: true, message: "If this email is registered, reset instructions have been sent." };
+    throw ApiError.notFound("No staff account found with this email, mobile number or staff ID.");
   }
 
   const resetToken = jwt.sign(
@@ -280,7 +298,7 @@ export const forgotPasswordService = async (email: string) => {
   );
 
   logger.info(`Password reset requested for ${admin.email}. Reset token created.`);
-  return { success: true, resetToken };
+  return { success: true, resetToken, email: admin.email, name: admin.name };
 };
 
 export const resetPasswordService = async (token: string, newPass: string) => {
@@ -301,6 +319,8 @@ export const resetPasswordService = async (token: string, newPass: string) => {
   }
 
   admin.password = newPass;
+  admin.loginAttempts = 0;
+  admin.lockUntil = undefined;
   await admin.save();
 
   logger.info(`Password reset successfully for ${admin.email}`);
