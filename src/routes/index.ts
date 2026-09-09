@@ -5,25 +5,26 @@ import rolesRouter from "../modules/roles/roles.routes";
 import websiteHomeRouter from "../modules/website/websiteHome.routes";
 import websiteAboutRouter from "../modules/website/websiteAbout.routes";
 import websiteAdvisoryBoardMemberRouter from "../modules/website/websiteAdvisoryBoardMember.routes";
+import websiteBlogRouter from "../modules/website/websiteBlog.routes";
 
 const router = Router();
 
-// Health check endpoint — check server status
+// Health Check Route
 router.get("/health", (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "Server is running ✅",
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV,
-  });
+    res.status(200).json({
+        status: "success",
+        message: "Server is healthy and running smoothly.",
+        timestamp: new Date().toISOString(),
+    });
 });
 
-// All routes
+// API Routes
 router.use("/auth", authRouter);
 router.use("/users/admin", staffRouter);
 router.use("/roles", rolesRouter);
 router.use("/website", websiteHomeRouter);
 router.use("/website", websiteAboutRouter);
 router.use("/website", websiteAdvisoryBoardMemberRouter);
+router.use("/website", websiteBlogRouter);
 
 export default router;
