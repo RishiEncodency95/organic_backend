@@ -10,7 +10,10 @@ const BlogHeroSchema: Schema = new Schema({
     titlePart1: { type: String },
     titlePart2: { type: String },
     subtitle: { type: String },
-    description: { type: String }
+    description: { type: String },
+    image: { type: String },
+    imageAlt: { type: String },
+    secondaryImage: { type: String }
 }, { timestamps: true });
 
 export default mongoose.model<IBlogHero>('BlogHero', BlogHeroSchema);

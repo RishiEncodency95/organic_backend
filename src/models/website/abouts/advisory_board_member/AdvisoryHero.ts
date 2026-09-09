@@ -11,6 +11,9 @@ const AdvisoryHeroSchema: Schema = new Schema({
     subtitlePart1: { type: String },
     subtitlePart2: { type: String },
     description: { type: String },
+    image: { type: String },
+    imageAlt: { type: String },
+    secondaryImage: { type: String },
     features: [{
         icon: { type: String },
         titlePart1: { type: String },
