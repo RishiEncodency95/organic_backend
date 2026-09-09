@@ -4,6 +4,7 @@ import staffRouter from "../modules/staff/staff.routes";
 import rolesRouter from "../modules/roles/roles.routes";
 import websiteHomeRouter from "../modules/website/websiteHome.routes";
 import websiteAboutRouter from "../modules/website/websiteAbout.routes";
+import websiteAdvisoryBoardMemberRouter from "../modules/website/websiteAdvisoryBoardMember.routes";
 
 const router = Router();
 
@@ -23,5 +24,6 @@ router.use("/users/admin", staffRouter);
 router.use("/roles", rolesRouter);
 router.use("/website", websiteHomeRouter);
 router.use("/website", websiteAboutRouter);
+router.use("/website", websiteAdvisoryBoardMemberRouter);
 
 export default router;
