@@ -6,6 +6,7 @@ import websiteHomeRouter from "../modules/website/websiteHome.routes";
 import websiteAboutRouter from "../modules/website/websiteAbout.routes";
 import websiteAdvisoryBoardMemberRouter from "../modules/website/websiteAdvisoryBoardMember.routes";
 import websiteBlogRouter from "../modules/website/websiteBlog.routes";
+import websiteBlogSlugRouter from "../modules/website/websiteBlogSlug.routes";
 
 const router = Router();
 
@@ -26,5 +27,6 @@ router.use("/website", websiteHomeRouter);
 router.use("/website", websiteAboutRouter);
 router.use("/website", websiteAdvisoryBoardMemberRouter);
 router.use("/website", websiteBlogRouter);
+router.use("/website", websiteBlogSlugRouter);
 
 export default router;
