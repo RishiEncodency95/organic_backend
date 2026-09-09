@@ -6,7 +6,11 @@ const aboutOrganizerSchema = new Schema({
         title: { type: String, default: '' },
         paragraphs: [{ type: String }],
         capabilitiesTitle: { type: String, default: '' },
-        capabilities: [{ type: String }]
+        capabilities: [{ type: String }],
+        image: { type: String, default: '' },
+        imageAlt: { type: String, default: '' },
+        logoImage: { type: String, default: '' },
+        secondaryImage: { type: String, default: '' }
     },
     badge: {
         number: { type: String, default: '' },

@@ -6,6 +6,9 @@ const aboutHeroSchema = new Schema({
     titlePart2: { type: String, default: '' },
     subtitle: { type: String, default: '' },
     description: { type: String, default: '' },
+    image: { type: String, default: '' },
+    imageAlt: { type: String, default: '' },
+    secondaryImage: { type: String, default: '' },
     buttons: [{
         label: { type: String, default: '' },
         link: { type: String, default: '' },
