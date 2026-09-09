@@ -2,6 +2,7 @@ import { Router } from "express";
 import authRouter from "../modules/auth/auth.routes";
 import staffRouter from "../modules/staff/staff.routes";
 import rolesRouter from "../modules/roles/roles.routes";
+import websiteHomeRouter from "../modules/website/websiteHome.routes";
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.get("/health", (req, res) => {
 router.use("/auth", authRouter);
 router.use("/users/admin", staffRouter);
 router.use("/roles", rolesRouter);
+router.use("/website", websiteHomeRouter);
 
 export default router;
