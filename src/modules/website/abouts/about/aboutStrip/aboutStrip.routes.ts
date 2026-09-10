@@ -1,18 +1,10 @@
-import express from "express";
-import {
-    createAboutStrip,
-    getAllAboutStrip,
-    getAboutStripById,
-    updateAboutStripById,
-    deleteAboutStripById
-} from './aboutStrip.controller';
+import { Router } from "express";
+import { getAboutStrip, updateAboutStrip } from "./aboutStrip.controller";
 
-const router = express.Router();
+const router = Router();
 
-router.post('/', createAboutStrip);
-router.get('/', getAllAboutStrip);
-router.get('/:id', getAboutStripById);
-router.put('/:id', updateAboutStripById);
-router.delete('/:id', deleteAboutStripById);
+router.get("/", getAboutStrip);
+router.put("/", updateAboutStrip);
+router.post("/", updateAboutStrip);
 
 export default router;

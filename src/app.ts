@@ -15,30 +15,36 @@ const app = express();
 // ─── Security Middlewares ─────────────────────────────────────────────────────
 
 // Secure HTTP headers
-app.use(helmet());
-
-// CORS configuration — allow frontend origin
-const allowedOrigins = [
-  env.ALLOWED_ORIGIN,
-  "http://localhost:3000",
-  "http://localhost:3001",
-  "http://localhost:5173",
-];
-
 app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(null, true); // Permissive in development
-      }
-    },
-    credentials: true, // Allow cookies
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+  helmet({
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false,
   })
 );
+
+// CORS configuration — allow frontend & admin origins
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["*"],
+    exposedHeaders: ["*"],
+  })
+);
+
+// Explicit Preflight Handler
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.header("Access-Control-Allow-Headers", req.headers["access-control-request-headers"] || "*");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.status(200).end();
+    return;
+  }
+  next();
+});
 
 
 // ─── General Middlewares ──────────────────────────────────────────────────────

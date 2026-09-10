@@ -1,18 +1,14 @@
-import express from 'express';
+import express from "express";
 import {
-    createBlogSlugArticle,
-    getBlogSlugArticles,
-    getBlogSlugArticleById,
-    updateBlogSlugArticle,
-    deleteBlogSlugArticle
-} from './blogSlugArticle.controller';
+  getBlogSlugArticle,
+  updateBlogSlugArticle,
+} from "./blogSlugArticle.controller";
+import { createUploader } from "../../../../../middlewares/upload.middleware";
 
 const router = express.Router();
+const uploader = createUploader("blogslugarticle");
 
-router.post('/', createBlogSlugArticle);
-router.get('/', getBlogSlugArticles);
-router.get('/:id', getBlogSlugArticleById);
-router.put('/:id', updateBlogSlugArticle);
-router.delete('/:id', deleteBlogSlugArticle);
+router.get("/", getBlogSlugArticle);
+router.put("/", uploader.single("image"), updateBlogSlugArticle);
 
 export default router;

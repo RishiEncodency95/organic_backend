@@ -1,18 +1,10 @@
-import express from "express";
-import {
-    createEventOverview,
-    getAllEventOverview,
-    getEventOverviewById,
-    updateEventOverviewById,
-    deleteEventOverviewById
-} from './eventOverview.controller';
+import { Router } from "express";
+import { getEventOverview, updateEventOverview } from "./eventOverview.controller";
 
-const router = express.Router();
+const router = Router();
 
-router.post('/', createEventOverview);
-router.get('/', getAllEventOverview);
-router.get('/:id', getEventOverviewById);
-router.put('/:id', updateEventOverviewById);
-router.delete('/:id', deleteEventOverviewById);
+router.get("/", getEventOverview);
+router.put("/", updateEventOverview);
+router.post("/", updateEventOverview);
 
 export default router;

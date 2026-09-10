@@ -1,18 +1,12 @@
-import express from 'express';
+import express from "express";
 import {
-    createBlogSlugSidebar,
-    getBlogSlugSidebars,
-    getBlogSlugSidebarById,
-    updateBlogSlugSidebar,
-    deleteBlogSlugSidebar
-} from './blogSlugSidebar.controller';
+  getBlogSlugSidebar,
+  updateBlogSlugSidebar,
+} from "./blogSlugSidebar.controller";
 
 const router = express.Router();
 
-router.post('/', createBlogSlugSidebar);
-router.get('/', getBlogSlugSidebars);
-router.get('/:id', getBlogSlugSidebarById);
-router.put('/:id', updateBlogSlugSidebar);
-router.delete('/:id', deleteBlogSlugSidebar);
+router.get("/", getBlogSlugSidebar);
+router.put("/", updateBlogSlugSidebar);
 
 export default router;

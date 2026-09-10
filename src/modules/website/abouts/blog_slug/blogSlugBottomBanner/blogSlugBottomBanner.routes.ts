@@ -1,18 +1,12 @@
-import express from 'express';
+import express from "express";
 import {
-    createBlogSlugBottomBanner,
-    getBlogSlugBottomBanners,
-    getBlogSlugBottomBannerById,
-    updateBlogSlugBottomBanner,
-    deleteBlogSlugBottomBanner
-} from './blogSlugBottomBanner.controller';
+  getBlogSlugBottomBanner,
+  updateBlogSlugBottomBanner,
+} from "./blogSlugBottomBanner.controller";
 
 const router = express.Router();
 
-router.post('/', createBlogSlugBottomBanner);
-router.get('/', getBlogSlugBottomBanners);
-router.get('/:id', getBlogSlugBottomBannerById);
-router.put('/:id', updateBlogSlugBottomBanner);
-router.delete('/:id', deleteBlogSlugBottomBanner);
+router.get("/", getBlogSlugBottomBanner);
+router.put("/", updateBlogSlugBottomBanner);
 
 export default router;

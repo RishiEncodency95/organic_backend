@@ -1,117 +1,50 @@
 import { Request, Response } from "express";
-import PartnersAndBrands from './partnersAndBrands.model';
-const path = require('path');
-const fs = require('fs');
+import asyncHandler from "../../../../utils/asyncHandler";
+import { ApiResponse } from "../../../../utils/ApiResponse";
+import {
+  getPartnersAndBrandsService,
+  updatePartnersAndBrandsService,
+  createPartnersAndBrandsService,
+  getAllPartnersAndBrandsService,
+  getPartnersAndBrandsByIdService,
+  updatePartnersAndBrandsByIdService,
+  deletePartnersAndBrandsByIdService,
+} from "./partnersAndBrands.service";
 
-export const createPartnersAndBrands = async (req: Request | any, res: Response | any) => {
-    try {
-        let updateData = { ...req.body };
-        
-        const arraysToParse = [
-            'industryLeadersLogos',
-            'knowledgeLogos',
-            'wellnessLogos',
-            'supportingLogos',
-            'emergingBrandsLogos'
-        ];
+export const getPartnersAndBrands = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await getPartnersAndBrandsService();
+  res.status(200).json(new ApiResponse(200, "Partners and Brands fetched successfully", data));
+});
 
-        arraysToParse.forEach(arrName => {
-            if (typeof updateData[arrName] === 'string') {
-                updateData[arrName] = JSON.parse(updateData[arrName]);
-            }
-        });
+export const updatePartnersAndBrands = asyncHandler(async (req: Request, res: Response) => {
+  const data = await updatePartnersAndBrandsService(req.body, req.files);
+  res.status(200).json(new ApiResponse(200, "Partners and Brands updated successfully", data));
+});
 
-        if (req.files && Array.isArray(req.files)) {
-            req.files.forEach((file: any) => {
-                const match = file.fieldname.match(/^([a-zA-Z]+)_(\d+)$/);
-                if (match) {
-                    const arrName = match[1];
-                    const index = parseInt(match[2], 10);
+export const createPartnersAndBrands = asyncHandler(async (req: Request, res: Response) => {
+  const data = await createPartnersAndBrandsService(req.body, req.files);
+  res.status(201).json(new ApiResponse(201, "Partners and Brands created successfully", data));
+});
 
-                    if (updateData[arrName] && updateData[arrName][index]) {
-                        updateData[arrName][index].image = `/uploads/organic_expo/${file.filename}`;
-                    }
-                }
-            });
-        }
+export const getAllPartnersAndBrands = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await getAllPartnersAndBrandsService();
+  res.status(200).json(new ApiResponse(200, "Partners and Brands list fetched successfully", data));
+});
 
-        const data = await PartnersAndBrands.create(updateData);
-        res.json({ success: true, data, message: 'Partners and Brands created successfully' });
-    } catch (error) {
-        console.error('Create PartnersAndBrands error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
+export const getPartnersAndBrandsById = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const data = await getPartnersAndBrandsByIdService(id);
+  res.status(200).json(new ApiResponse(200, "Partners and Brands fetched successfully", data));
+});
 
-export const getAllPartnersAndBrands = async (req: Request | any, res: Response | any) => {
-    try {
-        const data = await PartnersAndBrands.find();
-        res.json({ success: true, data });
-    } catch (error) {
-        console.error('Fetch All PartnersAndBrands error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
+export const updatePartnersAndBrandsById = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const data = await updatePartnersAndBrandsByIdService(id, req.body, req.files);
+  res.status(200).json(new ApiResponse(200, "Partners and Brands updated successfully", data));
+});
 
-export const getPartnersAndBrandsById = async (req: Request | any, res: Response | any) => {
-    try {
-        const data = await PartnersAndBrands.findById(req.params.id);
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        res.json({ success: true, data });
-    } catch (error) {
-        console.error('Fetch PartnersAndBrands by ID error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
-
-export const updatePartnersAndBrandsById = async (req: Request | any, res: Response | any) => {
-    try {
-        let updateData = { ...req.body };
-        
-        const arraysToParse = [
-            'industryLeadersLogos',
-            'knowledgeLogos',
-            'wellnessLogos',
-            'supportingLogos',
-            'emergingBrandsLogos'
-        ];
-
-        arraysToParse.forEach(arrName => {
-            if (typeof updateData[arrName] === 'string') {
-                updateData[arrName] = JSON.parse(updateData[arrName]);
-            }
-        });
-
-        if (req.files && Array.isArray(req.files)) {
-            req.files.forEach((file: any) => {
-                const match = file.fieldname.match(/^([a-zA-Z]+)_(\d+)$/);
-                if (match) {
-                    const arrName = match[1];
-                    const index = parseInt(match[2], 10);
-
-                    if (updateData[arrName] && updateData[arrName][index]) {
-                        updateData[arrName][index].image = `/uploads/organic_expo/${file.filename}`;
-                    }
-                }
-            });
-        }
-
-        const data = await PartnersAndBrands.findByIdAndUpdate(req.params.id, updateData, { new: true });
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        res.json({ success: true, data, message: 'Partners and Brands updated successfully' });
-    } catch (error) {
-        console.error('Update PartnersAndBrands error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
-
-export const deletePartnersAndBrandsById = async (req: Request | any, res: Response | any) => {
-    try {
-        const data = await PartnersAndBrands.findByIdAndDelete(req.params.id);
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        res.json({ success: true, message: 'Partners and Brands deleted successfully' });
-    } catch (error) {
-        console.error('Delete PartnersAndBrands error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
+export const deletePartnersAndBrandsById = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const data = await deletePartnersAndBrandsByIdService(id);
+  res.status(200).json(new ApiResponse(200, "Partners and Brands deleted successfully", data));
+});

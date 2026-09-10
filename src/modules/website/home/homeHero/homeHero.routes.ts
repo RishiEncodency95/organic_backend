@@ -1,30 +1,20 @@
-import { Router, Request, Response } from "express";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
+import { Router } from "express";
+import {
+  createHomeHero,
+  getAllHomeHero,
+  getHomeHeroById,
+  updateHomeHeroById,
+  deleteHomeHeroById,
+} from "./homeHero.controller";
+import { createUploader } from "../../../../middlewares/upload.middleware";
+
 const router = Router();
-import * as homeHeroController from './homeHero.controller';
+const upload = createUploader("homehero");
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadPath = path.join(__dirname, '../../../../public/uploads/organic_expo');
-        if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        cb(null, `homehero-${Date.now()}${path.extname(file.originalname)}`);
-    }
-});
-
-const upload = multer({
-    storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-});
-
-router.post('/', upload.single('img'), (req, res) => homeHeroController.createHomeHero(req, res));
-router.get('/', (req, res) => homeHeroController.getAllHomeHero(req, res));
-router.get('/:id', (req, res) => homeHeroController.getHomeHeroById(req, res));
-router.put('/:id', upload.single('img'), (req, res) => homeHeroController.updateHomeHeroById(req, res));
-router.delete('/:id', (req, res) => homeHeroController.deleteHomeHeroById(req, res));
+router.post("/", upload.single("img"), createHomeHero);
+router.get("/", getAllHomeHero);
+router.get("/:id", getHomeHeroById);
+router.put("/:id", upload.single("img"), updateHomeHeroById);
+router.delete("/:id", deleteHomeHeroById);
 
 export default router;

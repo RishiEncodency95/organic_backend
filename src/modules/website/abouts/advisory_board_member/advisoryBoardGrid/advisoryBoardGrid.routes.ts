@@ -1,18 +1,10 @@
-import express from 'express';
-import {
-    createAdvisoryBoardGrid,
-    getAdvisoryBoardGrids,
-    getAdvisoryBoardGridById,
-    updateAdvisoryBoardGrid,
-    deleteAdvisoryBoardGrid
-} from './advisoryBoardGrid.controller';
+import { Router } from "express";
+import { getAdvisoryBoardGrid, updateAdvisoryBoardGrid } from "./advisoryBoardGrid.controller";
 
-const router = express.Router();
+const router = Router();
 
-router.post('/', createAdvisoryBoardGrid);
-router.get('/', getAdvisoryBoardGrids);
-router.get('/:id', getAdvisoryBoardGridById);
-router.put('/:id', updateAdvisoryBoardGrid);
-router.delete('/:id', deleteAdvisoryBoardGrid);
+router.get("/", getAdvisoryBoardGrid);
+router.put("/", updateAdvisoryBoardGrid);
+router.post("/", updateAdvisoryBoardGrid);
 
 export default router;

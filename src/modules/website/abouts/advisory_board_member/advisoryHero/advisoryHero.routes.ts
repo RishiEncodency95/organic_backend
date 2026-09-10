@@ -1,18 +1,17 @@
-import express from 'express';
-import {
-    createAdvisoryHero,
-    getAdvisoryHeros,
-    getAdvisoryHeroById,
-    updateAdvisoryHero,
-    deleteAdvisoryHero
-} from './advisoryHero.controller';
+import { Router } from "express";
+import { getAdvisoryHero, updateAdvisoryHero } from "./advisoryHero.controller";
+import { createUploader } from "../../../../../middlewares/upload.middleware";
 
-const router = express.Router();
+const router = Router();
+const upload = createUploader("advisoryhero");
 
-router.post('/', createAdvisoryHero);
-router.get('/', getAdvisoryHeros);
-router.get('/:id', getAdvisoryHeroById);
-router.put('/:id', updateAdvisoryHero);
-router.delete('/:id', deleteAdvisoryHero);
+const uploadFields = upload.fields([
+  { name: "image", maxCount: 1 },
+  { name: "secondaryImage", maxCount: 1 },
+]);
+
+router.get("/", getAdvisoryHero);
+router.put("/", uploadFields, updateAdvisoryHero);
+router.post("/", uploadFields, updateAdvisoryHero);
 
 export default router;

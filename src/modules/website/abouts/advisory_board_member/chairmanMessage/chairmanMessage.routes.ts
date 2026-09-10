@@ -1,18 +1,10 @@
-import express from 'express';
-import {
-    createChairmanMessage,
-    getChairmanMessages,
-    getChairmanMessageById,
-    updateChairmanMessage,
-    deleteChairmanMessage
-} from './chairmanMessage.controller';
+import { Router } from "express";
+import { getChairmanMessage, updateChairmanMessage } from "./chairmanMessage.controller";
 
-const router = express.Router();
+const router = Router();
 
-router.post('/', createChairmanMessage);
-router.get('/', getChairmanMessages);
-router.get('/:id', getChairmanMessageById);
-router.put('/:id', updateChairmanMessage);
-router.delete('/:id', deleteChairmanMessage);
+router.get("/", getChairmanMessage);
+router.put("/", updateChairmanMessage);
+router.post("/", updateChairmanMessage);
 
 export default router;

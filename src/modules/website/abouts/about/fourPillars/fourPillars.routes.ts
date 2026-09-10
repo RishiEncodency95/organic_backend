@@ -1,18 +1,12 @@
-import express from "express";
-import {
-    createFourPillars,
-    getAllFourPillars,
-    getFourPillarsById,
-    updateFourPillarsById,
-    deleteFourPillarsById
-} from './fourPillars.controller';
+import { Router } from "express";
+import { getFourPillars, updateFourPillars } from "./fourPillars.controller";
+import { createUploader } from "../../../../../middlewares/upload.middleware";
 
-const router = express.Router();
+const router = Router();
+const upload = createUploader("fourpillars");
 
-router.post('/', createFourPillars);
-router.get('/', getAllFourPillars);
-router.get('/:id', getFourPillarsById);
-router.put('/:id', updateFourPillarsById);
-router.delete('/:id', deleteFourPillarsById);
+router.get("/", getFourPillars);
+router.put("/", upload.any(), updateFourPillars);
+router.post("/", upload.any(), updateFourPillars);
 
 export default router;

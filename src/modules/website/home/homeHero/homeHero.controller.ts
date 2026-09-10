@@ -1,63 +1,38 @@
 import { Request, Response } from "express";
-import HomeHero from './homeHero.model';
+import asyncHandler from "../../../../utils/asyncHandler";
+import { ApiResponse } from "../../../../utils/ApiResponse";
+import {
+  createHomeHeroService,
+  getAllHomeHeroService,
+  getHomeHeroByIdService,
+  updateHomeHeroByIdService,
+  deleteHomeHeroByIdService,
+} from "./homeHero.service";
 
-export const createHomeHero = async (req: Request | any, res: Response | any) => {
-    try {
-        let updateData = { ...req.body };
-        if (req.file) {
-            updateData.img = `/uploads/organic_expo/${req.file.filename}`;
-        }
-        const data = await HomeHero.create(updateData);
-        res.json({ success: true, data, message: 'Home Hero created successfully' });
-    } catch (error) {
-        console.error('Create HomeHero error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
+export const createHomeHero = asyncHandler(async (req: Request, res: Response) => {
+  const data = await createHomeHeroService(req.body, req.file);
+  res.status(201).json(new ApiResponse(201, "Home Hero banner created successfully", data));
+});
 
-export const getAllHomeHero = async (req: Request | any, res: Response | any) => {
-    try {
-        const data = await HomeHero.find();
-        res.json({ success: true, data });
-    } catch (error) {
-        console.error('Fetch All HomeHero error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
+export const getAllHomeHero = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await getAllHomeHeroService();
+  res.status(200).json(new ApiResponse(200, "Home Hero banners fetched successfully", data));
+});
 
-export const getHomeHeroById = async (req: Request | any, res: Response | any) => {
-    try {
-        const data = await HomeHero.findById(req.params.id);
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        res.json({ success: true, data });
-    } catch (error) {
-        console.error('Fetch HomeHero by ID error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
+export const getHomeHeroById = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const data = await getHomeHeroByIdService(id);
+  res.status(200).json(new ApiResponse(200, "Home Hero banner fetched successfully", data));
+});
 
-export const updateHomeHeroById = async (req: Request | any, res: Response | any) => {
-    try {
-        let updateData = { ...req.body };
-        if (req.file) {
-            updateData.img = `/uploads/organic_expo/${req.file.filename}`;
-        }
-        const data = await HomeHero.findByIdAndUpdate(req.params.id, updateData, { new: true });
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        res.json({ success: true, data, message: 'Home Hero updated successfully' });
-    } catch (error) {
-        console.error('Update HomeHero error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
+export const updateHomeHeroById = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const data = await updateHomeHeroByIdService(id, req.body, req.file);
+  res.status(200).json(new ApiResponse(200, "Home Hero banner updated successfully", data));
+});
 
-export const deleteHomeHeroById = async (req: Request | any, res: Response | any) => {
-    try {
-        const data = await HomeHero.findByIdAndDelete(req.params.id);
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        res.json({ success: true, message: 'Home Hero deleted successfully' });
-    } catch (error) {
-        console.error('Delete HomeHero error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
+export const deleteHomeHeroById = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const data = await deleteHomeHeroByIdService(id);
+  res.status(200).json(new ApiResponse(200, "Home Hero banner deleted successfully", data));
+});

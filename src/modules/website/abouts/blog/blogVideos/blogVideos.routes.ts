@@ -1,18 +1,12 @@
-import express from 'express';
+import express from "express";
 import {
-    createBlogVideos,
-    getBlogVideoss,
-    getBlogVideosById,
-    updateBlogVideos,
-    deleteBlogVideos
-} from './blogVideos.controller';
+  getBlogVideos,
+  updateBlogVideos,
+} from "./blogVideos.controller";
 
 const router = express.Router();
 
-router.post('/', createBlogVideos);
-router.get('/', getBlogVideoss);
-router.get('/:id', getBlogVideosById);
-router.put('/:id', updateBlogVideos);
-router.delete('/:id', deleteBlogVideos);
+router.get("/", getBlogVideos);
+router.put("/", updateBlogVideos);
 
 export default router;

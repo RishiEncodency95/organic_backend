@@ -1,18 +1,17 @@
-import express from "express";
-import {
-    createHomeAbout,
-    getAllHomeAbout,
-    getHomeAboutById,
-    updateHomeAboutById,
-    deleteHomeAboutById
-} from './homeAbout.controller';
+import { Router } from "express";
+import { getHomeAbout, updateHomeAbout } from "./homeAbout.controller";
+import { createUploader } from "../../../../../middlewares/upload.middleware";
 
-const router = express.Router();
+const router = Router();
+const upload = createUploader("homeabout");
 
-router.post('/', createHomeAbout);
-router.get('/', getAllHomeAbout);
-router.get('/:id', getHomeAboutById);
-router.put('/:id', updateHomeAboutById);
-router.delete('/:id', deleteHomeAboutById);
+const uploadFields = upload.fields([
+  { name: "image", maxCount: 1 },
+  { name: "secondaryImage", maxCount: 1 },
+]);
+
+router.get("/", getHomeAbout);
+router.put("/", uploadFields, updateHomeAbout);
+router.post("/", uploadFields, updateHomeAbout);
 
 export default router;

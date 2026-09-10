@@ -1,18 +1,10 @@
-import express from "express";
-import {
-    createVisionMission,
-    getAllVisionMission,
-    getVisionMissionById,
-    updateVisionMissionById,
-    deleteVisionMissionById
-} from './visionMission.controller';
+import { Router } from "express";
+import { getVisionMission, updateVisionMission } from "./visionMission.controller";
 
-const router = express.Router();
+const router = Router();
 
-router.post('/', createVisionMission);
-router.get('/', getAllVisionMission);
-router.get('/:id', getVisionMissionById);
-router.put('/:id', updateVisionMissionById);
-router.delete('/:id', deleteVisionMissionById);
+router.get("/", getVisionMission);
+router.put("/", updateVisionMission);
+router.post("/", updateVisionMission);
 
 export default router;

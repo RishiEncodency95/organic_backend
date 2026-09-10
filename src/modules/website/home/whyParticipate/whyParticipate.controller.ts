@@ -1,89 +1,50 @@
 import { Request, Response } from "express";
-import WhyParticipate from './whyParticipate.model';
-const path = require('path');
-const fs = require('fs');
+import asyncHandler from "../../../../utils/asyncHandler";
+import { ApiResponse } from "../../../../utils/ApiResponse";
+import {
+  getWhyParticipateService,
+  updateWhyParticipateService,
+  createWhyParticipateService,
+  getAllWhyParticipateService,
+  getWhyParticipateByIdService,
+  updateWhyParticipateByIdService,
+  deleteWhyParticipateByIdService,
+} from "./whyParticipate.service";
 
-export const createWhyParticipate = async (req: Request | any, res: Response | any) => {
-    try {
-        let updateData = { ...req.body };
-        
-        if (typeof updateData.points === 'string') updateData.points = JSON.parse(updateData.points);
-        if (typeof updateData.mainPoints === 'string') updateData.mainPoints = JSON.parse(updateData.mainPoints);
-        if (typeof updateData.buttons === 'string') updateData.buttons = JSON.parse(updateData.buttons);
+export const getWhyParticipate = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await getWhyParticipateService();
+  res.status(200).json(new ApiResponse(200, "Why Participate fetched successfully", data));
+});
 
-        if (req.files && req.files.image && req.files.image[0]) {
-            updateData.image = `/uploads/organic_expo/${req.files.image[0].filename}`;
-        }
-        
-        if (req.files && req.files.brochure && req.files.brochure[0]) {
-            if (!updateData.buttons) updateData.buttons = {};
-            if (!updateData.buttons.brochure) updateData.buttons.brochure = {};
-            updateData.buttons.brochure.link = `/uploads/organic_expo/${req.files.brochure[0].filename}`;
-        }
+export const updateWhyParticipate = asyncHandler(async (req: Request, res: Response) => {
+  const data = await updateWhyParticipateService(req.body, req.files);
+  res.status(200).json(new ApiResponse(200, "Why Participate updated successfully", data));
+});
 
-        const data = await WhyParticipate.create(updateData);
-        res.json({ success: true, data, message: 'Why Participate created successfully' });
-    } catch (error) {
-        console.error('Create WhyParticipate error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
+export const createWhyParticipate = asyncHandler(async (req: Request, res: Response) => {
+  const data = await createWhyParticipateService(req.body, req.files);
+  res.status(201).json(new ApiResponse(201, "Why Participate created successfully", data));
+});
 
-export const getAllWhyParticipate = async (req: Request | any, res: Response | any) => {
-    try {
-        const data = await WhyParticipate.find();
-        res.json({ success: true, data });
-    } catch (error) {
-        console.error('Fetch All WhyParticipate error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
+export const getAllWhyParticipate = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await getAllWhyParticipateService();
+  res.status(200).json(new ApiResponse(200, "Why Participate list fetched successfully", data));
+});
 
-export const getWhyParticipateById = async (req: Request | any, res: Response | any) => {
-    try {
-        const data = await WhyParticipate.findById(req.params.id);
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        res.json({ success: true, data });
-    } catch (error) {
-        console.error('Fetch WhyParticipate by ID error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
+export const getWhyParticipateById = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const data = await getWhyParticipateByIdService(id);
+  res.status(200).json(new ApiResponse(200, "Why Participate fetched successfully", data));
+});
 
-export const updateWhyParticipateById = async (req: Request | any, res: Response | any) => {
-    try {
-        let updateData = { ...req.body };
-        
-        if (typeof updateData.points === 'string') updateData.points = JSON.parse(updateData.points);
-        if (typeof updateData.mainPoints === 'string') updateData.mainPoints = JSON.parse(updateData.mainPoints);
-        if (typeof updateData.buttons === 'string') updateData.buttons = JSON.parse(updateData.buttons);
+export const updateWhyParticipateById = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const data = await updateWhyParticipateByIdService(id, req.body, req.files);
+  res.status(200).json(new ApiResponse(200, "Why Participate updated successfully", data));
+});
 
-        if (req.files && req.files.image && req.files.image[0]) {
-            updateData.image = `/uploads/organic_expo/${req.files.image[0].filename}`;
-        }
-        
-        if (req.files && req.files.brochure && req.files.brochure[0]) {
-            if (!updateData.buttons) updateData.buttons = {};
-            if (!updateData.buttons.brochure) updateData.buttons.brochure = {};
-            updateData.buttons.brochure.link = `/uploads/organic_expo/${req.files.brochure[0].filename}`;
-        }
-
-        const data = await WhyParticipate.findByIdAndUpdate(req.params.id, updateData, { new: true });
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        res.json({ success: true, data, message: 'Why Participate updated successfully' });
-    } catch (error) {
-        console.error('Update WhyParticipate error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
-
-export const deleteWhyParticipateById = async (req: Request | any, res: Response | any) => {
-    try {
-        const data = await WhyParticipate.findByIdAndDelete(req.params.id);
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        res.json({ success: true, message: 'Why Participate deleted successfully' });
-    } catch (error) {
-        console.error('Delete WhyParticipate error:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-}
+export const deleteWhyParticipateById = asyncHandler(async (req: Request, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const data = await deleteWhyParticipateByIdService(id);
+  res.status(200).json(new ApiResponse(200, "Why Participate deleted successfully", data));
+});

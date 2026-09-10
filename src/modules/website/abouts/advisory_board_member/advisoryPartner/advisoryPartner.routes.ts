@@ -1,18 +1,12 @@
-import express from 'express';
+import express from "express";
 import {
-    createAdvisoryPartner,
-    getAdvisoryPartners,
-    getAdvisoryPartnerById,
-    updateAdvisoryPartner,
-    deleteAdvisoryPartner
-} from './advisoryPartner.controller';
+  getAdvisoryPartner,
+  updateAdvisoryPartner,
+} from "./advisoryPartner.controller";
 
 const router = express.Router();
 
-router.post('/', createAdvisoryPartner);
-router.get('/', getAdvisoryPartners);
-router.get('/:id', getAdvisoryPartnerById);
-router.put('/:id', updateAdvisoryPartner);
-router.delete('/:id', deleteAdvisoryPartner);
+router.get("/", getAdvisoryPartner);
+router.put("/", updateAdvisoryPartner);
 
 export default router;

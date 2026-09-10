@@ -1,18 +1,21 @@
-import express from 'express';
+import express from "express";
 import {
-    createBlogHero,
-    getBlogHeros,
-    getBlogHeroById,
-    updateBlogHero,
-    deleteBlogHero
-} from './blogHero.controller';
+  getBlogHero,
+  updateBlogHero,
+} from "./blogHero.controller";
+import { createUploader } from "../../../../../middlewares/upload.middleware";
 
 const router = express.Router();
+const uploader = createUploader("bloghero");
 
-router.post('/', createBlogHero);
-router.get('/', getBlogHeros);
-router.get('/:id', getBlogHeroById);
-router.put('/:id', updateBlogHero);
-router.delete('/:id', deleteBlogHero);
+router.get("/", getBlogHero);
+router.put(
+  "/",
+  uploader.fields([
+    { name: "image", maxCount: 1 },
+    { name: "secondaryImage", maxCount: 1 },
+  ]),
+  updateBlogHero
+);
 
 export default router;

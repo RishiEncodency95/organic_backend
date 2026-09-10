@@ -1,60 +1,17 @@
-import { Request, Response } from 'express';
-import BlogStats from './blogStats.model';
+import { Request, Response } from "express";
+import asyncHandler from "../../../../../utils/asyncHandler";
+import { ApiResponse } from "../../../../../utils/ApiResponse";
+import {
+  getBlogStatsService,
+  updateBlogStatsService,
+} from "./blogStats.service";
 
-export const createBlogStats = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const newData = new BlogStats(req.body);
-        const savedData = await newData.save();
-        res.status(201).json(savedData);
-    } catch (error: any) {
-        res.status(400).json({ message: error.message });
-    }
-};
+export const getBlogStats = asyncHandler(async (_req: Request, res: Response) => {
+  const data = await getBlogStatsService();
+  res.status(200).json(new ApiResponse(200, "Blog Stats fetched successfully", data));
+});
 
-export const getBlogStatss = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const data = await BlogStats.find();
-        res.status(200).json(data);
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-export const getBlogStatsById = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const data = await BlogStats.findById(req.params.id);
-        if (!data) {
-            res.status(404).json({ message: 'Not found' });
-            return;
-        }
-        res.status(200).json(data);
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-export const updateBlogStats = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const updatedData = await BlogStats.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if (!updatedData) {
-            res.status(404).json({ message: 'Not found' });
-            return;
-        }
-        res.status(200).json(updatedData);
-    } catch (error: any) {
-        res.status(400).json({ message: error.message });
-    }
-};
-
-export const deleteBlogStats = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const deletedData = await BlogStats.findByIdAndDelete(req.params.id);
-        if (!deletedData) {
-            res.status(404).json({ message: 'Not found' });
-            return;
-        }
-        res.status(200).json({ message: 'Deleted successfully' });
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
-};
+export const updateBlogStats = asyncHandler(async (req: Request, res: Response) => {
+  const data = await updateBlogStatsService(req.body);
+  res.status(200).json(new ApiResponse(200, "Blog Stats updated successfully", data));
+});

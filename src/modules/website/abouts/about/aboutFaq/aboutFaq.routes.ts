@@ -1,18 +1,10 @@
-import express from "express";
-import {
-    createAboutFaq,
-    getAllAboutFaq,
-    getAboutFaqById,
-    updateAboutFaqById,
-    deleteAboutFaqById
-} from './aboutFaq.controller';
+import { Router } from "express";
+import { getAboutFaq, updateAboutFaq } from "./aboutFaq.controller";
 
-const router = express.Router();
+const router = Router();
 
-router.post('/', createAboutFaq);
-router.get('/', getAllAboutFaq);
-router.get('/:id', getAboutFaqById);
-router.put('/:id', updateAboutFaqById);
-router.delete('/:id', deleteAboutFaqById);
+router.get("/", getAboutFaq);
+router.put("/", updateAboutFaq);
+router.post("/", updateAboutFaq);
 
 export default router;

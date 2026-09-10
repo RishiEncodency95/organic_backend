@@ -1,18 +1,21 @@
-import express from "express";
+import { Router } from "express";
 import {
-    createAboutOrganizer,
-    getAllAboutOrganizer,
-    getAboutOrganizerById,
-    updateAboutOrganizerById,
-    deleteAboutOrganizerById
-} from './aboutOrganizer.controller';
+  getAboutOrganizer,
+  updateAboutOrganizer,
+} from "./aboutOrganizer.controller";
+import { createUploader } from "../../../../../middlewares/upload.middleware";
 
-const router = express.Router();
+const router = Router();
+const upload = createUploader("aboutorganizer");
 
-router.post('/', createAboutOrganizer);
-router.get('/', getAllAboutOrganizer);
-router.get('/:id', getAboutOrganizerById);
-router.put('/:id', updateAboutOrganizerById);
-router.delete('/:id', deleteAboutOrganizerById);
+const uploadFields = upload.fields([
+  { name: "image", maxCount: 1 },
+  { name: "logoImage", maxCount: 1 },
+  { name: "secondaryImage", maxCount: 1 },
+]);
+
+router.get("/", getAboutOrganizer);
+router.put("/", uploadFields, updateAboutOrganizer);
+router.post("/", uploadFields, updateAboutOrganizer);
 
 export default router;

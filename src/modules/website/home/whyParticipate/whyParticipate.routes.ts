@@ -1,35 +1,32 @@
-import { Router, Request, Response } from "express";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
+import { Router } from "express";
+import {
+  getWhyParticipate,
+  updateWhyParticipate,
+  createWhyParticipate,
+  getAllWhyParticipate,
+  getWhyParticipateById,
+  updateWhyParticipateById,
+  deleteWhyParticipateById,
+} from "./whyParticipate.controller";
+import { createUploader } from "../../../../middlewares/upload.middleware";
+
 const router = Router();
-import * as whyParticipateController from './whyParticipate.controller';
+const upload = createUploader("whyparticipate");
 
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const uploadPath = path.join(__dirname, '../../../../public/uploads/organic_expo');
-        if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath, { recursive: true });
-        cb(null, uploadPath);
-    },
-    filename: (req, file, cb) => {
-        cb(null, `whyparticipate-${file.fieldname}-${Date.now()}${path.extname(file.originalname)}`);
-    }
-});
+const uploadFields = upload.fields([
+  { name: "image", maxCount: 1 },
+  { name: "brochure", maxCount: 1 },
+]);
 
-const upload = multer({
-    storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit for brochure
-});
+// Single-document Home Section routes
+router.get("/", getWhyParticipate);
+router.put("/", uploadFields, updateWhyParticipate);
+router.post("/", uploadFields, updateWhyParticipate);
 
-const uploadFields = [
-    { name: 'image', maxCount: 1 },
-    { name: 'brochure', maxCount: 1 }
-];
-
-router.post('/', upload.fields(uploadFields), (req, res) => whyParticipateController.createWhyParticipate(req, res));
-router.get('/', (req, res) => whyParticipateController.getAllWhyParticipate(req, res));
-router.get('/:id', (req, res) => whyParticipateController.getWhyParticipateById(req, res));
-router.put('/:id', upload.fields(uploadFields), (req, res) => whyParticipateController.updateWhyParticipateById(req, res));
-router.delete('/:id', (req, res) => whyParticipateController.deleteWhyParticipateById(req, res));
+// Multi-document CRUD routes (if used by id)
+router.get("/list", getAllWhyParticipate);
+router.get("/:id", getWhyParticipateById);
+router.put("/:id", uploadFields, updateWhyParticipateById);
+router.delete("/:id", deleteWhyParticipateById);
 
 export default router;
