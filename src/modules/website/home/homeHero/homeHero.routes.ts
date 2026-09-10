@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   createHomeHero,
   getAllHomeHero,
+  syncHomeHero,
   getHomeHeroById,
   updateHomeHeroById,
   deleteHomeHeroById,
@@ -13,6 +14,7 @@ const upload = createUploader("homehero");
 
 router.post("/", upload.single("img"), createHomeHero);
 router.get("/", getAllHomeHero);
+router.put("/", syncHomeHero);
 router.get("/:id", getHomeHeroById);
 router.put("/:id", upload.single("img"), updateHomeHeroById);
 router.delete("/:id", deleteHomeHeroById);

@@ -126,7 +126,7 @@ export const loginService = async (data: LoginInput) => {
 
   return {
     requiresTwoFactor: false,
-    twoFactorSetupRequired: !admin.isTwoFactorEnabled,
+    twoFactorSetupRequired: false,
     accessToken,
     refreshToken,
     admin: {

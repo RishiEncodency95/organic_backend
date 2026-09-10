@@ -1,4 +1,5 @@
 import express from "express";
+import path from "path";
 import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
@@ -52,6 +53,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "10kb" })); // Reject request body larger than 10kb
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(cookieParser(env.COOKIE_SECRET));
+app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
 
 // Prevent NoSQL injection attacks — strips MongoDB operator keys from request bodies
 app.use((req, _res, next) => {

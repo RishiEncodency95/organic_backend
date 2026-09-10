@@ -7,6 +7,7 @@ import websiteAboutRouter from "../modules/website/websiteAbout.routes";
 import websiteAdvisoryBoardMemberRouter from "../modules/website/websiteAdvisoryBoardMember.routes";
 import websiteBlogRouter from "../modules/website/websiteBlog.routes";
 import websiteBlogSlugRouter from "../modules/website/websiteBlogSlug.routes";
+import uploadRouter from "../modules/upload/upload.routes";
 
 const router = Router();
 
@@ -20,6 +21,7 @@ router.get("/health", (req, res) => {
 });
 
 // API Routes
+router.use("/uploads", uploadRouter);
 router.use("/auth", authRouter);
 router.use("/users/admin", staffRouter);
 router.use("/roles", rolesRouter);
