@@ -1,15 +1,15 @@
 import express from 'express';
 
 // Import about page routes
-import aboutHeroRoutes from './routes/abouts/about/aboutHeroRoutes';
-import aboutStripRoutes from './routes/abouts/about/aboutStripRoutes';
-import homeAboutRoutes from './routes/abouts/about/homeAboutRoutes';
-import eventOverviewRoutes from './routes/abouts/about/eventOverviewRoutes';
-import fourPillarsRoutes from './routes/abouts/about/fourPillarsRoutes';
-import aboutVenueRoutes from './routes/abouts/about/aboutVenueRoutes';
-import aboutFaqRoutes from './routes/abouts/about/aboutFaqRoutes';
-import visionMissionRoutes from './routes/abouts/about/visionMissionRoutes';
-import aboutOrganizerRoutes from './routes/abouts/about/aboutOrganizerRoutes';
+import aboutHeroRoutes from './abouts/about/aboutHero/aboutHero.routes';
+import aboutStripRoutes from './abouts/about/aboutStrip/aboutStrip.routes';
+import homeAboutRoutes from './abouts/about/homeAbout/homeAbout.routes';
+import eventOverviewRoutes from './abouts/about/eventOverview/eventOverview.routes';
+import fourPillarsRoutes from './abouts/about/fourPillars/fourPillars.routes';
+import aboutVenueRoutes from './abouts/about/aboutVenue/aboutVenue.routes';
+import aboutFaqRoutes from './abouts/about/aboutFaq/aboutFaq.routes';
+import visionMissionRoutes from './abouts/about/visionMission/visionMission.routes';
+import aboutOrganizerRoutes from './abouts/about/aboutOrganizer/aboutOrganizer.routes';
 
 const router = express.Router();
 

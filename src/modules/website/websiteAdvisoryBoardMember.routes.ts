@@ -1,11 +1,11 @@
 import express from 'express';
-import AdvisoryHeroRoutes from '../../routes/website/abouts/advisory_board_member/AdvisoryHero.routes';
-import ChairmanMessageRoutes from '../../routes/website/abouts/advisory_board_member/ChairmanMessage.routes';
-import AdvisoryBoardGridRoutes from '../../routes/website/abouts/advisory_board_member/AdvisoryBoardGrid.routes';
-import AdvisoryBoardGridMemberRoutes from '../../routes/website/abouts/advisory_board_member/AdvisoryBoardGridMember.routes';
-import AdvisoryPartnerRoutes from '../../routes/website/abouts/advisory_board_member/AdvisoryPartner.routes';
-import NominateBannerRoutes from '../../routes/website/abouts/advisory_board_member/NominateBanner.routes';
-import WhyJoinAdvisoryRoutes from '../../routes/website/abouts/advisory_board_member/WhyJoinAdvisory.routes';
+import AdvisoryHeroRoutes from './abouts/advisory_board_member/advisoryHero/advisoryHero.routes';
+import ChairmanMessageRoutes from './abouts/advisory_board_member/chairmanMessage/chairmanMessage.routes';
+import AdvisoryBoardGridRoutes from './abouts/advisory_board_member/advisoryBoardGrid/advisoryBoardGrid.routes';
+import AdvisoryBoardGridMemberRoutes from './abouts/advisory_board_member/advisoryBoardGridMember/advisoryBoardGridMember.routes';
+import AdvisoryPartnerRoutes from './abouts/advisory_board_member/advisoryPartner/advisoryPartner.routes';
+import NominateBannerRoutes from './abouts/advisory_board_member/nominateBanner/nominateBanner.routes';
+import WhyJoinAdvisoryRoutes from './abouts/advisory_board_member/whyJoinAdvisory/whyJoinAdvisory.routes';
 
 const router = express.Router();
 

@@ -1,21 +1,21 @@
 import { Router } from 'express';
 
 // Import home page routes
-import becomeSponsorRoutes from './routes/home/becomeSponsorRoutes';
-import beyondExhibitionRoutes from './routes/home/beyondExhibitionRoutes';
-import buyerSellerMeetRoutes from './routes/home/buyerSellerMeetRoutes';
-import conferenceSeminarsRoutes from './routes/home/conferenceSeminarsRoutes';
-import exploreCategoriesRoutes from './routes/home/exploreCategoriesRoutes';
-import expoCategoriesRoutes from './routes/home/expoCategoriesRoutes';
-import globalPlatformRoutes from './routes/home/globalPlatformRoutes';
-import homeHeroRoutes from './routes/home/homeHeroRoutes';
-import homeVideosRoutes from './routes/home/homeVideosRoutes';
-import introductionSectionRoutes from './routes/home/introductionSectionRoutes';
-import partnersAndBrandsRoutes from './routes/home/partnersAndBrandsRoutes';
-import sponsorsAndAttendRoutes from './routes/home/sponsorsAndAttendRoutes';
-import sponsorshipCategoriesRoutes from './routes/home/sponsorshipCategoriesRoutes';
-import testimonialsCarouselRoutes from './routes/home/testimonialsCarouselRoutes';
-import whyParticipateRoutes from './routes/home/whyParticipateRoutes';
+import becomeSponsorRoutes from './home/becomeSponsor/becomeSponsor.routes';
+import beyondExhibitionRoutes from './home/beyondExhibition/beyondExhibition.routes';
+import buyerSellerMeetRoutes from './home/buyerSellerMeet/buyerSellerMeet.routes';
+import conferenceSeminarsRoutes from './home/conferenceSeminars/conferenceSeminars.routes';
+import exploreCategoriesRoutes from './home/exploreCategories/exploreCategories.routes';
+import expoCategoriesRoutes from './home/expoCategories/expoCategories.routes';
+import globalPlatformRoutes from './home/globalPlatform/globalPlatform.routes';
+import homeHeroRoutes from './home/homeHero/homeHero.routes';
+import homeVideosRoutes from './home/homeVideos/homeVideos.routes';
+import introductionSectionRoutes from './home/introductionSection/introductionSection.routes';
+import partnersAndBrandsRoutes from './home/partnersAndBrands/partnersAndBrands.routes';
+import sponsorsAndAttendRoutes from './home/sponsorsAndAttend/sponsorsAndAttend.routes';
+import sponsorshipCategoriesRoutes from './home/sponsorshipCategories/sponsorshipCategories.routes';
+import testimonialsCarouselRoutes from './home/testimonialsCarousel/testimonialsCarousel.routes';
+import whyParticipateRoutes from './home/whyParticipate/whyParticipate.routes';
 
 const router = Router();
 

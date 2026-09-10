@@ -1,13 +1,13 @@
 import express from 'express';
-import BlogHeroRoutes from '../../routes/website/abouts/blog/BlogHero.routes';
-import BlogFeaturedRoutes from '../../routes/website/abouts/blog/BlogFeatured.routes';
-import BlogLatestRoutes from '../../routes/website/abouts/blog/BlogLatest.routes';
-import BlogStatsRoutes from '../../routes/website/abouts/blog/BlogStats.routes';
-import BlogCtaRoutes from '../../routes/website/abouts/blog/BlogCta.routes';
-import BlogExpertsRoutes from '../../routes/website/abouts/blog/BlogExperts.routes';
-import BlogReportsRoutes from '../../routes/website/abouts/blog/BlogReports.routes';
-import BlogVideosRoutes from '../../routes/website/abouts/blog/BlogVideos.routes';
-import BlogSidebarRoutes from '../../routes/website/abouts/blog/BlogSidebar.routes';
+import BlogHeroRoutes from './abouts/blog/blogHero/blogHero.routes';
+import BlogFeaturedRoutes from './abouts/blog/blogFeatured/blogFeatured.routes';
+import BlogLatestRoutes from './abouts/blog/blogLatest/blogLatest.routes';
+import BlogStatsRoutes from './abouts/blog/blogStats/blogStats.routes';
+import BlogCtaRoutes from './abouts/blog/blogCta/blogCta.routes';
+import BlogExpertsRoutes from './abouts/blog/blogExperts/blogExperts.routes';
+import BlogReportsRoutes from './abouts/blog/blogReports/blogReports.routes';
+import BlogVideosRoutes from './abouts/blog/blogVideos/blogVideos.routes';
+import BlogSidebarRoutes from './abouts/blog/blogSidebar/blogSidebar.routes';
 
 const router = express.Router();
 
