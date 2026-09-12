@@ -18,7 +18,7 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
 
   const folder = (req.query.folder as string) || "bharat-organic/content";
 
-  // If Cloudinary is available, upload directly to Cloudinary
+  // If Cloudinary is configured, strictly upload directly to Cloudinary (prevents server disk bloat)
   if (isCloudinaryConfigured()) {
     try {
       const result = await new Promise<{ secure_url: string; public_id: string }>((resolve, reject) => {
@@ -47,8 +47,9 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
         })
       );
       return;
-    } catch (cloudErr) {
-      console.error("Cloudinary upload stream error, falling back to local:", cloudErr);
+    } catch (cloudErr: any) {
+      console.error("Cloudinary upload error:", cloudErr);
+      throw ApiError.badRequest(cloudErr?.message || "Failed to upload file to Cloudinary");
     }
   }
 
