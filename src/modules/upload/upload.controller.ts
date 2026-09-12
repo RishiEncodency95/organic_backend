@@ -40,12 +40,13 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
         uploadStream.end(file.buffer);
       });
 
-      return res.status(200).json(
+      res.status(200).json(
         new ApiResponse(200, "File uploaded to Cloudinary successfully", {
           url: result.secure_url,
           publicId: result.public_id,
         })
       );
+      return;
     } catch (cloudErr) {
       console.error("Cloudinary upload stream error, falling back to local:", cloudErr);
     }
@@ -65,10 +66,11 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
 
   const relativeUrl = `/uploads/${folder.replace(/[^a-zA-Z0-9_-]/g, "_")}/${uniqueName}`;
 
-  return res.status(200).json(
+  res.status(200).json(
     new ApiResponse(200, "File saved locally successfully", {
       url: relativeUrl,
       publicId: uniqueName,
     })
   );
+  return;
 });

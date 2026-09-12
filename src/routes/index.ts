@@ -8,6 +8,8 @@ import websiteAdvisoryBoardMemberRouter from "../modules/website/websiteAdvisory
 import websiteBlogRouter from "../modules/website/websiteBlog.routes";
 import websiteBlogSlugRouter from "../modules/website/websiteBlogSlug.routes";
 import uploadRouter from "../modules/upload/upload.routes";
+import seoRouter from "../modules/seo/seo.routes";
+import settingsRouter from "../modules/settings/settings.routes";
 
 const router = Router();
 
@@ -22,9 +24,12 @@ router.get("/health", (req, res) => {
 
 // API Routes
 router.use("/uploads", uploadRouter);
+router.use("/settings", settingsRouter);
 router.use("/auth", authRouter);
 router.use("/users/admin", staffRouter);
 router.use("/roles", rolesRouter);
+router.use("/seo", seoRouter);
+router.use("/website/seo", seoRouter);
 router.use("/website", websiteHomeRouter);
 router.use("/website", websiteAboutRouter);
 router.use("/website", websiteAdvisoryBoardMemberRouter);

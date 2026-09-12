@@ -12,6 +12,6 @@ export const getSponsorsAndAttend = asyncHandler(async (_req: Request, res: Resp
 });
 
 export const updateSponsorsAndAttend = asyncHandler(async (req: Request, res: Response) => {
-  const data = await updateSponsorsAndAttendService(req.body);
+  const data = await updateSponsorsAndAttendService(req.body, req.files);
   res.status(200).json(new ApiResponse(200, "Sponsors and Attend updated successfully", data));
 });

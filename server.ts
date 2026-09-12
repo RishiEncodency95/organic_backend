@@ -7,7 +7,7 @@ import { logger } from "./src/utils/logger";
 
 const startServer = async (): Promise<void> => {
   try {
-    // Database connections pehle
+    // Database connections pehle (with audience-strip route mounted)
     await connectDB();
     await connectRedis();
 

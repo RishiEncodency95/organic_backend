@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-// Import home page routes
+import audienceStripRoutes from './home/audienceStrip/audienceStrip.routes';
 import becomeSponsorRoutes from './home/becomeSponsor/becomeSponsor.routes';
 import beyondExhibitionRoutes from './home/beyondExhibition/beyondExhibition.routes';
 import buyerSellerMeetRoutes from './home/buyerSellerMeet/buyerSellerMeet.routes';
@@ -20,6 +20,7 @@ import whyParticipateRoutes from './home/whyParticipate/whyParticipate.routes';
 const router = Router();
 
 // Mount home page routes
+router.use('/home/audience-strip', audienceStripRoutes);
 router.use('/home/become-sponsor', becomeSponsorRoutes);
 router.use('/home/beyond-exhibition', beyondExhibitionRoutes);
 router.use('/home/buyer-seller-meet', buyerSellerMeetRoutes);
