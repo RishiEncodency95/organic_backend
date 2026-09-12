@@ -1,4 +1,5 @@
 import { Router } from "express";
+import uploadRouter from "../modules/upload/upload.routes";
 import authRouter from "../modules/auth/auth.routes";
 import staffRouter from "../modules/staff/staff.routes";
 import rolesRouter from "../modules/roles/roles.routes";
@@ -35,5 +36,10 @@ router.use("/website", websiteAboutRouter);
 router.use("/website", websiteAdvisoryBoardMemberRouter);
 router.use("/website", websiteBlogRouter);
 router.use("/website", websiteBlogSlugRouter);
+router.use("/website", websiteWhyExhibitRouter);
+router.use("/website", websiteExhibitorListRouter);
+router.use("/website", websiteWhyVisitRouter);
 
 export default router;
+
+
