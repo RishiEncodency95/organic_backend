@@ -1,4 +1,13 @@
+import { Router } from "express";
 import uploadRouter from "../modules/upload/upload.routes";
+import authRouter from "../modules/auth/auth.routes";
+import staffRouter from "../modules/staff/staff.routes";
+import rolesRouter from "../modules/roles/roles.routes";
+import websiteHomeRouter from "../modules/website/websiteHome.routes";
+import websiteAboutRouter from "../modules/website/websiteAbout.routes";
+import websiteAdvisoryBoardMemberRouter from "../modules/website/websiteAdvisoryBoardMember.routes";
+import websiteBlogRouter from "../modules/website/websiteBlog.routes";
+import websiteBlogSlugRouter from "../modules/website/websiteBlogSlug.routes";
 import websiteWhyExhibitRouter from "../modules/website/websiteWhyExhibit.routes";
 import websiteExhibitorListRouter from "../modules/website/websiteExhibitorList.routes";
 import websiteWhyVisitRouter from "../modules/website/websiteWhyVisit.routes";
