@@ -54,6 +54,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser(env.COOKIE_SECRET));
 app.use("/uploads", express.static(path.join(process.cwd(), "public", "uploads")));
+app.use("/exhibitors", express.static(path.join(process.cwd(), "public", "exhibitors")));
 
 // Prevent NoSQL injection attacks — strips MongoDB operator keys from request bodies
 app.use((req, _res, next) => {
