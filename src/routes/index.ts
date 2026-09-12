@@ -15,6 +15,7 @@ import websiteExhibitorListRouter from "../modules/website/websiteExhibitorList.
 import websiteWhyVisitRouter from "../modules/website/websiteWhyVisit.routes";
 import websiteMsmePmsRouter from "../modules/website/websiteMsmePms.routes";
 import websiteBuyerSellerMeetRouter from "../modules/website/websiteBuyerSellerMeet.routes";
+import websiteOpportunitiesRouter from "../modules/website/websiteOpportunities.routes";
 
 const router = Router();
 
@@ -45,6 +46,7 @@ router.use("/website", websiteExhibitorListRouter);
 router.use("/website", websiteWhyVisitRouter);
 router.use("/website", websiteMsmePmsRouter);
 router.use("/website", websiteBuyerSellerMeetRouter);
+router.use("/website", websiteOpportunitiesRouter);
 
 export default router;
 
