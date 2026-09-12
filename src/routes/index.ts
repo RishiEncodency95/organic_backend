@@ -8,9 +8,13 @@ import websiteAboutRouter from "../modules/website/websiteAbout.routes";
 import websiteAdvisoryBoardMemberRouter from "../modules/website/websiteAdvisoryBoardMember.routes";
 import websiteBlogRouter from "../modules/website/websiteBlog.routes";
 import websiteBlogSlugRouter from "../modules/website/websiteBlogSlug.routes";
-import uploadRouter from "../modules/upload/upload.routes";
 import seoRouter from "../modules/seo/seo.routes";
 import settingsRouter from "../modules/settings/settings.routes";
+import websiteWhyExhibitRouter from "../modules/website/websiteWhyExhibit.routes";
+import websiteExhibitorListRouter from "../modules/website/websiteExhibitorList.routes";
+import websiteWhyVisitRouter from "../modules/website/websiteWhyVisit.routes";
+import websiteMsmePmsRouter from "../modules/website/websiteMsmePms.routes";
+import websiteBuyerSellerMeetRouter from "../modules/website/websiteBuyerSellerMeet.routes";
 
 const router = Router();
 
@@ -39,6 +43,8 @@ router.use("/website", websiteBlogSlugRouter);
 router.use("/website", websiteWhyExhibitRouter);
 router.use("/website", websiteExhibitorListRouter);
 router.use("/website", websiteWhyVisitRouter);
+router.use("/website", websiteMsmePmsRouter);
+router.use("/website", websiteBuyerSellerMeetRouter);
 
 export default router;
 
