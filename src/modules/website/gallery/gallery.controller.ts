@@ -34,7 +34,7 @@ export const createItem = async (req: Request, res: Response) => {
 
 export const updateItem = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const item = await galleryService.updateGalleryItem(id, req.body);
     if (!item) {
       return res.status(404).json({
@@ -56,7 +56,7 @@ export const updateItem = async (req: Request, res: Response) => {
 
 export const updateStatus = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { status } = req.body;
     const item = await galleryService.updateGalleryItemStatus(id, status);
     if (!item) {
@@ -79,7 +79,7 @@ export const updateStatus = async (req: Request, res: Response) => {
 
 export const deleteItem = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const item = await galleryService.deleteGalleryItem(id);
     if (!item) {
       return res.status(404).json({
