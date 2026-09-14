@@ -4,7 +4,9 @@ const highlightSchema = new Schema(
   {
     main: { type: String, default: "" },
     sub: { type: String, default: "" },
+    image: { type: String, default: "" },
     img: { type: String, default: "" },
+    icon: { type: String, default: "" },
   },
   { _id: false }
 );
@@ -58,10 +60,10 @@ const whyExhibitHeroSchema = new Schema(
     highlights: {
       type: [highlightSchema],
       default: [
-        { main: "Global", sub: "Exposure", img: "" },
-        { main: "Quality", sub: "Connections", img: "" },
-        { main: "Business", sub: "Growth", img: "" },
-        { main: "Brand", sub: "Visibility", img: "" },
+        { main: "Global", sub: "Exposure", image: "/uploads/icons/x1.png", img: "/uploads/icons/x1.png", icon: "" },
+        { main: "Quality", sub: "Connections", image: "/uploads/icons/x2.png", img: "/uploads/icons/x2.png", icon: "" },
+        { main: "Business", sub: "Growth", image: "/uploads/icons/x3.png", img: "/uploads/icons/x3.png", icon: "" },
+        { main: "Brand", sub: "Visibility", image: "/uploads/icons/x4.png", img: "/uploads/icons/x4.png", icon: "" },
       ],
     },
     buttons: {

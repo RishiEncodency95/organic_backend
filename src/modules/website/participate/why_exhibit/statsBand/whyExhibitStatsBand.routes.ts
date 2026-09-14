@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getAllWhyExhibitStatsBand,
+  updateAllWhyExhibitStatsBand,
   createWhyExhibitStatsBand,
   getWhyExhibitStatsBandById,
   updateWhyExhibitStatsBandById,
@@ -10,6 +11,7 @@ import {
 const router = Router();
 
 router.get("/", getAllWhyExhibitStatsBand);
+router.put("/", updateAllWhyExhibitStatsBand);
 router.post("/", createWhyExhibitStatsBand);
 
 router.get("/:id", getWhyExhibitStatsBandById);

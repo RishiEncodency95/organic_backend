@@ -4,6 +4,7 @@ const statItemSchema = new Schema(
   {
     val: { type: String, required: true },
     label: { type: String, required: true },
+    icon: { type: String, default: "Users" },
     iconName: { type: String, default: "Users" },
   },
   { timestamps: true }

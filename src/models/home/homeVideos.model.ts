@@ -10,26 +10,7 @@ const videoSchema = new Schema({
 const homeVideosSchema = new Schema({
   videos: {
     type: [videoSchema],
-    default: [
-      {
-        title: "Bharat Organic Expo 2027: A New Era for Sustainable Farming",
-        location: "Bharat Mandapam, New Delhi",
-        videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        thumbnail: "https://images.unsplash.com/photo-1540575467063-178a50c2df87?q=80&w=800&auto=format&fit=crop"
-      },
-      {
-        title: "Exhibitors Speak: B2B Growth & Global Buyer Connections",
-        location: "New Delhi, India",
-        videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        thumbnail: "https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=800&auto=format&fit=crop"
-      },
-      {
-        title: "Industry Leaders Panel: Insights into Organic & Eco Markets",
-        location: "Hall 12, New Delhi",
-        videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        thumbnail: "https://images.unsplash.com/photo-1551836022-d5d88e9218df?q=80&w=800&auto=format&fit=crop"
-      }
-    ]
+    default: []
   }
 }, { timestamps: true });
 

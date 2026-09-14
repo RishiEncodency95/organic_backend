@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   getAllWhyExhibitReasons,
+  updateAllWhyExhibitReasons,
   createWhyExhibitReasons,
   getWhyExhibitReasonsById,
   updateWhyExhibitReasonsById,
@@ -14,6 +15,7 @@ const upload = createUploader("whyexhibitreasons");
 const uploadFields = upload.fields([{ name: "img", maxCount: 1 }]);
 
 router.get("/", getAllWhyExhibitReasons);
+router.put("/", updateAllWhyExhibitReasons);
 router.post("/", uploadFields, createWhyExhibitReasons);
 
 router.get("/:id", getWhyExhibitReasonsById);

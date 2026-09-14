@@ -3,6 +3,7 @@ import asyncHandler from "../../../../../utils/asyncHandler";
 import { ApiResponse } from "../../../../../utils/ApiResponse";
 import {
   getAllWhyExhibitReasonsService,
+  updateAllWhyExhibitReasonsService,
   createWhyExhibitReasonsService,
   getWhyExhibitReasonsByIdService,
   updateWhyExhibitReasonsByIdService,
@@ -12,6 +13,11 @@ import {
 export const getAllWhyExhibitReasons = asyncHandler(async (_req: Request, res: Response) => {
   const data = await getAllWhyExhibitReasonsService();
   res.status(200).json(new ApiResponse(200, "Why Exhibit reasons fetched successfully", data));
+});
+
+export const updateAllWhyExhibitReasons = asyncHandler(async (req: Request, res: Response) => {
+  const data = await updateAllWhyExhibitReasonsService(req.body);
+  res.status(200).json(new ApiResponse(200, "Why Exhibit reasons updated successfully", data));
 });
 
 export const createWhyExhibitReasons = asyncHandler(async (req: Request, res: Response) => {

@@ -3,8 +3,10 @@ import TestimonialsCarousel from "../../../../models/home/testimonialsCarousel.m
 export const getTestimonialsCarouselService = async () => {
   let data = await TestimonialsCarousel.findOne();
   if (!data) {
-    data = await TestimonialsCarousel.create({});
+    data = await TestimonialsCarousel.create({ testimonials: [], videos: [] });
   }
+
+  
   return data;
 };
 
@@ -14,6 +16,14 @@ export const updateTestimonialsCarouselService = async (payload: any) => {
   if (typeof updateData.testimonials === "string") {
     try {
       updateData.testimonials = JSON.parse(updateData.testimonials);
+    } catch {
+      // keep as is
+    }
+  }
+
+  if (typeof updateData.videos === "string") {
+    try {
+      updateData.videos = JSON.parse(updateData.videos);
     } catch {
       // keep as is
     }
