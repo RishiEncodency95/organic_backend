@@ -17,6 +17,9 @@ import websiteMsmePmsRouter from "../modules/website/websiteMsmePms.routes";
 import websiteBuyerSellerMeetRouter from "../modules/website/websiteBuyerSellerMeet.routes";
 import websiteOpportunitiesRouter from "../modules/website/websiteOpportunities.routes";
 import websiteGalleryRouter from "../modules/website/gallery/gallery.routes";
+import websiteAwardsRouter from "../modules/website/websiteAwards.routes";
+import contactEnquiryRouter from "../modules/website/contact/contactEnquiry.routes";
+import verifyRouter from "../modules/website/contact/verify.routes";
 
 const router = Router();
 
@@ -48,8 +51,14 @@ router.use("/website", websiteWhyVisitRouter);
 router.use("/website", websiteMsmePmsRouter);
 router.use("/website", websiteBuyerSellerMeetRouter);
 router.use("/website", websiteOpportunitiesRouter);
+router.use("/website", websiteAwardsRouter);
 router.use("/website/gallery", websiteGalleryRouter);
 router.use("/gallery", websiteGalleryRouter);
+router.use("/contact-enquiry", contactEnquiryRouter);
+router.use("/website/contact-enquiry", contactEnquiryRouter);
+router.use("/website/contact", contactEnquiryRouter);
+router.use("/verify", verifyRouter);
+router.use("/website/verify", verifyRouter);
 
 export default router;
 
