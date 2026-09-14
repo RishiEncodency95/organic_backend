@@ -16,6 +16,7 @@ import websiteWhyVisitRouter from "../modules/website/websiteWhyVisit.routes";
 import websiteMsmePmsRouter from "../modules/website/websiteMsmePms.routes";
 import websiteBuyerSellerMeetRouter from "../modules/website/websiteBuyerSellerMeet.routes";
 import websiteOpportunitiesRouter from "../modules/website/websiteOpportunities.routes";
+import websiteGalleryRouter from "../modules/website/gallery/gallery.routes";
 
 const router = Router();
 
@@ -47,6 +48,8 @@ router.use("/website", websiteWhyVisitRouter);
 router.use("/website", websiteMsmePmsRouter);
 router.use("/website", websiteBuyerSellerMeetRouter);
 router.use("/website", websiteOpportunitiesRouter);
+router.use("/website/gallery", websiteGalleryRouter);
+router.use("/gallery", websiteGalleryRouter);
 
 export default router;
 
