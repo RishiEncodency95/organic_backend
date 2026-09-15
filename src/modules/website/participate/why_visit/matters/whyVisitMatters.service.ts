@@ -35,6 +35,23 @@ export const getWhyVisitMattersService = async () => {
 
 export const updateWhyVisitMattersService = async (payload: any, files?: any) => {
   const updateData = parseJsonFields(payload, files);
+  if (updateData.items && !updateData.cards) {
+    updateData.cards = updateData.items;
+  } else if (updateData.cards && !updateData.items) {
+    updateData.items = updateData.cards;
+  }
+  if (updateData.subtitle && !updateData.subline1) {
+    updateData.subline1 = updateData.subtitle;
+  }
+  if (updateData.description && !updateData.subline2) {
+    updateData.subline2 = updateData.description;
+  }
+  if (updateData.lowerTitle && !updateData.bannerTitle) {
+    updateData.bannerTitle = updateData.lowerTitle;
+  }
+  if (updateData.lowerDescription && !updateData.bannerDesc) {
+    updateData.bannerDesc = updateData.lowerDescription;
+  }
   const data = await WhyVisitMatters.findOneAndUpdate({}, updateData, { new: true, upsert: true });
   return data;
 };

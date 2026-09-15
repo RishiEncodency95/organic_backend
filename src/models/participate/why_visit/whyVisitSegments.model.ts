@@ -8,6 +8,7 @@ const segmentSchema = new Schema(
     desc: { type: String, default: "" },
     color: { type: String, default: "#2d7a27" },
     iconImg: { type: String, default: "" },
+    iconImage: { type: String, default: "" },
     image: { type: String, default: "" },
   },
   { _id: false }
