@@ -20,6 +20,7 @@ import websiteGalleryRouter from "../modules/website/gallery/gallery.routes";
 import websiteAwardsRouter from "../modules/website/websiteAwards.routes";
 import contactEnquiryRouter from "../modules/website/contact/contactEnquiry.routes";
 import verifyRouter from "../modules/website/contact/verify.routes";
+import blogPostRouter from "../modules/blogPost/blogPost.routes";
 
 const router = Router();
 
@@ -45,6 +46,8 @@ router.use("/website", websiteAboutRouter);
 router.use("/website", websiteAdvisoryBoardMemberRouter);
 router.use("/website", websiteBlogRouter);
 router.use("/website", websiteBlogSlugRouter);
+router.use("/blogs", blogPostRouter);
+router.use("/website/blogs", blogPostRouter);
 router.use("/website", websiteWhyExhibitRouter);
 router.use("/website", websiteExhibitorListRouter);
 router.use("/website", websiteWhyVisitRouter);

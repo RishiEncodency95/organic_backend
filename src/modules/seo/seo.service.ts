@@ -120,7 +120,14 @@ export function generateSeoDefaults(
 export const seoService = {
   async getSeoByPage(pageKey: string, envType: "local" | "live" = "local") {
     const normKey = normalizePageKey(pageKey);
-    const existing = await Seo.findOne({ page: normKey });
+    let existing = await Seo.findOne({ page: normKey });
+    if (!existing && !normKey.includes("/")) {
+      existing = await Seo.findOne({ page: `participate/${normKey}` }) || await Seo.findOne({ page: `about/${normKey}` });
+    } else if (!existing && normKey.includes("/")) {
+      const parts = normKey.split("/");
+      const lastPart = parts[parts.length - 1];
+      existing = await Seo.findOne({ page: lastPart });
+    }
 
     if (existing) {
       const data = existing.toObject();
