@@ -11,6 +11,8 @@ import awardsInfoColumnsRoutes from "./awards/awardsInfoColumns/awardsInfoColumn
 import awardsCtaRoutes from "./awards/awardsCta/awardsCta.routes";
 import awardsNominationRoutes from "./awards/awardsNomination/awardsNomination.routes";
 import awardsNominationSidebarRoutes from "./awards/awardsNominationSidebar/awardsNominationSidebar.routes";
+import awardsNominationHeroRoutes from "./awards/awardsNominationHero/awardsNominationHero.routes";
+import awardsNominationStepsRoutes from "./awards/awardsNominationSteps/awardsNominationSteps.routes";
 
 const router = Router();
 
@@ -25,5 +27,7 @@ router.use("/awards/info-columns", awardsInfoColumnsRoutes);
 router.use("/awards/cta", awardsCtaRoutes);
 router.use("/awards/nominations", awardsNominationRoutes);
 router.use("/awards/nomination-sidebar", awardsNominationSidebarRoutes);
+router.use("/awards/nomination-hero", awardsNominationHeroRoutes);
+router.use("/awards/nomination-steps", awardsNominationStepsRoutes);
 
 export default router;

@@ -3,8 +3,14 @@ import mongoose, { Schema } from "mongoose";
 const awardsAboutSchema = new Schema(
   {
     enabled: { type: Boolean, default: true },
+    eyebrow: { type: String, default: "ABOUT THE AWARDS" },
     title: { type: String, default: "About the Awards" },
     description: {
+      type: String,
+      default:
+        "Bharat Organic Excellence Awards 2027 recognise outstanding organisations, brands, entrepreneurs, farmers and professionals for their remarkable contribution to the growth and promotion of the organic, natural and sustainable industry.",
+    },
+    shortDescription: {
       type: String,
       default:
         "Bharat Organic Excellence Awards 2027 recognise outstanding organisations, brands, entrepreneurs, farmers and professionals for their remarkable contribution to the growth and promotion of the organic, natural and sustainable industry.",

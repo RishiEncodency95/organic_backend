@@ -10,7 +10,7 @@ export const createAdvisoryBoardGridMemberService = async (payload: any, file?: 
 };
 
 export const getAllAdvisoryBoardGridMembersService = async () => {
-  return await AdvisoryBoardGridMember.find().sort({ createdAt: -1 });
+  return await AdvisoryBoardGridMember.find().sort({ order: 1, createdAt: -1 });
 };
 
 export const getAdvisoryBoardGridMemberByIdService = async (id: string) => {

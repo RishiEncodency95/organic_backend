@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
 import Settings from "../../models/settings.model";
+import GalleryHero from "../../models/gallery/galleryHero.model";
+import GalleryCounters from "../../models/gallery/galleryCounters.model";
 
 const defaultFooter = {
   key: "footer",
@@ -108,6 +110,60 @@ export const updateSettings = async (req: Request, res: Response) => {
       };
       if (Array.isArray(bodyPayload.landingPage.sections)) {
         mergedData.landingPage.sections = bodyPayload.landingPage.sections;
+      }
+    }
+
+    if (bodyPayload.galleryPage) {
+      mergedData.galleryPage = {
+        ...(currentData.galleryPage || {}),
+        ...bodyPayload.galleryPage,
+      };
+      if (Array.isArray(bodyPayload.galleryPage.sections)) {
+        mergedData.galleryPage.sections = bodyPayload.galleryPage.sections;
+        const hero = bodyPayload.galleryPage.sections.find(
+          (s: any) => s.key === "gallery-hero" || s.name === "HeroSection"
+        );
+        if (hero) {
+          try {
+            await GalleryHero.findOneAndUpdate(
+              {},
+              {
+                enabled: hero.enabled !== false,
+                title: hero.title || "GLIMPSES",
+                subtitle: hero.subtitle || "",
+                shortDescription: hero.shortDescription || hero.description || "",
+                rightImage: hero.rightImage || hero.image || "",
+              },
+              { upsert: true, new: true }
+            );
+          } catch (e) {
+            console.error("Failed to sync GalleryHero from settings:", e);
+          }
+        }
+
+        const counters = bodyPayload.galleryPage.sections.find(
+          (s: any) => s.key === "gallery-counters" || s.name === "Counters"
+        );
+        if (counters && Array.isArray(counters.items)) {
+          try {
+            await GalleryCounters.findOneAndUpdate(
+              {},
+              {
+                enabled: counters.enabled !== false,
+                title: counters.title || "EXPO IMPACT IN NUMBERS",
+                items: counters.items.map((it: any) => ({
+                  val: it.val ?? it.number ?? it.count ?? "",
+                  label: it.label ?? it.title ?? "",
+                  icon: it.icon ?? "Users",
+                  image: it.image ?? "",
+                })),
+              },
+              { upsert: true, new: true }
+            );
+          } catch (e) {
+            console.error("Failed to sync GalleryCounters from settings:", e);
+          }
+        }
       }
     }
 

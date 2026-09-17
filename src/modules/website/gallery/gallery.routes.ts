@@ -1,7 +1,15 @@
 import { Router } from "express";
 import * as galleryController from "./gallery.controller";
+import galleryHeroRouter from "./galleryHero/galleryHero.routes";
+import galleryCountersRouter from "./galleryCounters/galleryCounters.routes";
 
 const router = Router();
+
+// Gallery Hero Section
+router.use("/hero", galleryHeroRouter);
+
+// Gallery Counters Section
+router.use("/counters", galleryCountersRouter);
 
 // Metadata: Categories and Years
 router.get("/meta", galleryController.getMeta);
