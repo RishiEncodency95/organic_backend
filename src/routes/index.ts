@@ -9,6 +9,7 @@ import websiteAdvisoryBoardMemberRouter from "../modules/website/websiteAdvisory
 import websiteBlogRouter from "../modules/website/websiteBlog.routes";
 import websiteBlogSlugRouter from "../modules/website/websiteBlogSlug.routes";
 import seoRouter from "../modules/seo/seo.routes";
+import advancedSeoRouter from "../modules/seo/advancedSeo.routes";
 import settingsRouter from "../modules/settings/settings.routes";
 import websiteWhyExhibitRouter from "../modules/website/websiteWhyExhibit.routes";
 import websiteExhibitorListRouter from "../modules/website/websiteExhibitorList.routes";
@@ -41,6 +42,8 @@ router.use("/users/admin", staffRouter);
 router.use("/roles", rolesRouter);
 router.use("/seo", seoRouter);
 router.use("/website/seo", seoRouter);
+router.use("/seo-settings", advancedSeoRouter);
+router.use("/website/seo-settings", advancedSeoRouter);
 router.use("/website", websiteHomeRouter);
 router.use("/website", websiteAboutRouter);
 router.use("/website", websiteAdvisoryBoardMemberRouter);

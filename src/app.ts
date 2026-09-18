@@ -10,6 +10,7 @@ import { logger } from "./utils/logger";
 import { errorHandler } from "./middlewares/errorHandler.middleware";
 import { apiLimiter } from "./middlewares/rateLimiter.middleware";
 import router from "./routes/index";
+import { generateSitemapXml } from "./modules/seo/sitemap.controller";
 
 const app = express();
 
@@ -63,6 +64,15 @@ app.use(
   express.static(path.join(process.cwd(), "public", "uploads"))
 );
 app.use("/exhibitors", express.static(path.join(process.cwd(), "public", "exhibitors")));
+app.use(
+  "/seo-files",
+  (_req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    next();
+  },
+  express.static(path.join(process.cwd(), "public", "seo-files"))
+);
 
 // Prevent NoSQL injection attacks — strips MongoDB operator keys from request bodies
 app.use((req, _res, next) => {
@@ -97,6 +107,10 @@ app.use(
  
 app.use("/api", apiLimiter);
 app.use("/api/v1", apiLimiter);
+
+// ─── Sitemap (public, no auth, no rate limit) ────────────────────────────────
+
+app.get("/sitemap.xml", generateSitemapXml);
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 

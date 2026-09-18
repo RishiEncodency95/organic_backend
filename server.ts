@@ -4,12 +4,14 @@ import { connectRedis, isRedisConnected } from "./src/config/redis";
 import { isCloudinaryConfigured } from "./src/config/cloudinary";
 import { env } from "./src/config/env";
 import { logger } from "./src/utils/logger";
+import { autoSeedSuperAdmin } from "./src/utils/autoSeed";
 
 const startServer = async (): Promise<void> => {
   try {
     // Database connections pehle (with audience-strip route mounted)
     await connectDB();
     await connectRedis();
+    await autoSeedSuperAdmin();
 
     const server = app.listen(env.PORT, () => {
       // ─── Startup Status ───────────────────────────────
