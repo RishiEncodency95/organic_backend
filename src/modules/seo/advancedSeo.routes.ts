@@ -10,6 +10,7 @@ const upload = multer({
 
 router.get("/advanced", advancedSeoController.getAdvancedSeo);
 router.put("/scripts", advancedSeoController.updateScripts);
+router.put("/social-links", advancedSeoController.updateSocialLinks);
 router.post("/upload-file", upload.single("file"), advancedSeoController.uploadFile);
 router.delete("/file/:fileId", advancedSeoController.deleteFile);
 

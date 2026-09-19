@@ -19,14 +19,31 @@ export const advancedSeoController = {
           headerScripts: "",
           footerScripts: "",
           seoFiles: [],
+          socialLinks: {
+            facebook: "https://www.facebook.com/bharatorganicexpo",
+            instagram: "https://www.instagram.com/bharatorganicexpo",
+            twitter: "https://x.com/organicexpoin",
+            youtube: "https://www.youtube.com/@bharatorganicexpo",
+            linkedin: "https://www.linkedin.com/company/bharatorganicexpo/",
+          },
         });
       }
+
+      const defaultSocial = {
+        facebook: "https://www.facebook.com/bharatorganicexpo",
+        instagram: "https://www.instagram.com/bharatorganicexpo",
+        twitter: "https://x.com/organicexpoin",
+        youtube: "https://www.youtube.com/@bharatorganicexpo",
+        linkedin: "https://www.linkedin.com/company/bharatorganicexpo/",
+      };
+
       return res.status(200).json({
         success: true,
         data: {
           headerScripts: record.headerScripts || "",
           footerScripts: record.footerScripts || "",
           seoFiles: record.seoFiles || [],
+          socialLinks: record.socialLinks || defaultSocial,
         },
       });
     } catch (error: any) {
@@ -40,7 +57,7 @@ export const advancedSeoController = {
   // PUT /api/seo-settings/scripts
   async updateScripts(req: Request, res: Response) {
     try {
-      const { headerScripts, footerScripts } = req.body;
+      const { headerScripts, footerScripts, socialLinks } = req.body;
       let record = await AdvancedSeo.findOne();
       if (!record) {
         record = new AdvancedSeo();
@@ -48,23 +65,66 @@ export const advancedSeoController = {
 
       record.headerScripts = typeof headerScripts === "string" ? headerScripts : record.headerScripts;
       record.footerScripts = typeof footerScripts === "string" ? footerScripts : record.footerScripts;
+      if (socialLinks && typeof socialLinks === "object") {
+        record.socialLinks = {
+          facebook: typeof socialLinks.facebook === "string" ? socialLinks.facebook.trim() : (record.socialLinks?.facebook || ""),
+          instagram: typeof socialLinks.instagram === "string" ? socialLinks.instagram.trim() : (record.socialLinks?.instagram || ""),
+          twitter: typeof socialLinks.twitter === "string" ? socialLinks.twitter.trim() : (record.socialLinks?.twitter || ""),
+          youtube: typeof socialLinks.youtube === "string" ? socialLinks.youtube.trim() : (record.socialLinks?.youtube || ""),
+          linkedin: typeof socialLinks.linkedin === "string" ? socialLinks.linkedin.trim() : (record.socialLinks?.linkedin || ""),
+        };
+      }
       record.updatedBy = (req as any).user?.name || "Admin User";
 
       await record.save();
 
       return res.status(200).json({
         success: true,
-        message: "Global scripts updated successfully",
+        message: "Settings updated successfully",
         data: {
           headerScripts: record.headerScripts,
           footerScripts: record.footerScripts,
           seoFiles: record.seoFiles,
+          socialLinks: record.socialLinks,
         },
       });
     } catch (error: any) {
       return res.status(500).json({
         success: false,
         message: error.message || "Failed to update scripts",
+      });
+    }
+  },
+
+  // PUT /api/seo-settings/social-links
+  async updateSocialLinks(req: Request, res: Response) {
+    try {
+      const { facebook, instagram, twitter, youtube, linkedin } = req.body;
+      let record = await AdvancedSeo.findOne();
+      if (!record) {
+        record = new AdvancedSeo();
+      }
+
+      record.socialLinks = {
+        facebook: typeof facebook === "string" ? facebook.trim() : (record.socialLinks?.facebook || ""),
+        instagram: typeof instagram === "string" ? instagram.trim() : (record.socialLinks?.instagram || ""),
+        twitter: typeof twitter === "string" ? twitter.trim() : (record.socialLinks?.twitter || ""),
+        youtube: typeof youtube === "string" ? youtube.trim() : (record.socialLinks?.youtube || ""),
+        linkedin: typeof linkedin === "string" ? linkedin.trim() : (record.socialLinks?.linkedin || ""),
+      };
+      record.updatedBy = (req as any).user?.name || "Admin User";
+
+      await record.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Social media links updated successfully",
+        data: record.socialLinks,
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || "Failed to update social media links",
       });
     }
   },
