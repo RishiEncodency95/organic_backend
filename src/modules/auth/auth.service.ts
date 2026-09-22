@@ -116,7 +116,10 @@ export const loginService = async (data: LoginInput) => {
     };
   }
 
-  // Direct login if 2FA disabled or setup pending
+  // Direct login if 2FA disabled or setup pending — this branch only runs
+  // when admin.isTwoFactorEnabled is false, i.e. 2FA has never been set up
+  // for this account yet, so flag it so the frontend shows the QR setup
+  // screen immediately instead of relying on a later redirect bounce.
   await admin.resetLoginAttempts();
 
   const accessToken = generateAccessToken(admin._id.toString(), admin.role);
@@ -126,7 +129,7 @@ export const loginService = async (data: LoginInput) => {
 
   return {
     requiresTwoFactor: false,
-    twoFactorSetupRequired: false,
+    twoFactorSetupRequired: true,
     accessToken,
     refreshToken,
     admin: {
