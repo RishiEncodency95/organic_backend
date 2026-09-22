@@ -22,6 +22,7 @@ import websiteAwardsRouter from "../modules/website/websiteAwards.routes";
 import contactEnquiryRouter from "../modules/website/contact/contactEnquiry.routes";
 import verifyRouter from "../modules/website/contact/verify.routes";
 import blogPostRouter from "../modules/blogPost/blogPost.routes";
+import careersRouter from "./careers.routes";
 
 const router = Router();
 
@@ -35,6 +36,8 @@ router.get("/health", (req, res) => {
 });
 
 // API Routes
+router.use("/careers", careersRouter);
+router.use("/admin/careers", careersRouter);
 router.use("/uploads", uploadRouter);
 router.use("/settings", settingsRouter);
 router.use("/auth", authRouter);

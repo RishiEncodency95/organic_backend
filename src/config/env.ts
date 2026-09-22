@@ -16,6 +16,24 @@ const envSchema = z.object({
   TOTP_APP_NAME: z.string().default("OrganicAdmin"),
   ALLOWED_ORIGIN: z.string().default("http://localhost:5173"),
   COOKIE_SECRET: z.string().min(1, "COOKIE_SECRET is required"),
+
+  // AI Keys
+  OPENAI_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
+
+  // Cloudinary
+  CLOUDINARY_CLOUD_NAME: z.string().optional(),
+  CLOUDINARY_API_KEY: z.string().optional(),
+  CLOUDINARY_API_SECRET: z.string().optional(),
+
+  // SMTP Email
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.string().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  FROM_EMAIL: z.string().optional(),
+  FROM_NAME: z.string().optional(),
+  CONTACT_ADMIN_EMAIL: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -27,3 +45,4 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
+
