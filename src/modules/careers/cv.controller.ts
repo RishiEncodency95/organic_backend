@@ -18,12 +18,12 @@ export const uploadCv = async (req: Request, res: Response): Promise<void> => {
       "application/pdf",
       "application/msword",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "text/plain",
     ];
 
-    const isAllowedExt = /\.(pdf|doc|docx|txt)$/i.test(file.originalname);
+    const isAllowedExt = /\.(pdf|doc|docx)$/i.test(file.originalname);
 
-    if (!allowedMimeTypes.includes(file.mimetype) && !isAllowedExt) {
+    // Both must look right — a renamed file should not pass on its name alone.
+    if (!allowedMimeTypes.includes(file.mimetype) || !isAllowedExt) {
       res.status(400).json({
         success: false,
         message: "Invalid file type. Only PDF, DOC, and DOCX files are allowed.",
@@ -162,6 +162,7 @@ export const analyzeCv = async (req: Request, res: Response): Promise<void> => {
     if (ext.candidate.email) profile.email = ext.candidate.email;
     if (ext.candidate.phone) profile.phone = ext.candidate.phone;
     if (ext.candidate.location) profile.location = ext.candidate.location;
+    if (ext.candidate.linkedin) profile.linkedin = ext.candidate.linkedin;
     if (ext.education && ext.education.length > 0) profile.education = ext.education;
     if (ext.experience && ext.experience.length > 0) profile.experience = ext.experience;
     if (ext.skills && ext.skills.length > 0) profile.skills = ext.skills;

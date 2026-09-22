@@ -6,6 +6,7 @@ export interface AIAnalysisOutput {
     email: string | null;
     phone: string | null;
     location: string | null;
+    linkedin: string | null;
   };
   education: string[];
   experience: string[];
@@ -83,10 +84,11 @@ ${cvText}
 REQUIRED JSON RESPONSE STRUCTURE:
 {
   "candidate": {
-    "name": "Full Name or null",
+    "name": "Full Name with a space between First and Last Name (e.g. 'Rohit Kumar'), in Title Case even if the CV writes it in capitals, or null",
     "email": "Email Address or null",
     "phone": "Phone Number or null",
-    "location": "Current City/Location or null"
+    "location": "Current City/Location or null",
+    "linkedin": "LinkedIn profile URL or handle exactly as written in the CV (e.g. 'linkedin.com/in/rohit-kumar') or null"
   },
   "education": ["Degree/Institution listed in CV"],
   "experience": ["Work history/role listed in CV"],
