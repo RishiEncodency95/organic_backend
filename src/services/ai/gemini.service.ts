@@ -49,7 +49,8 @@ REQUIRED JSON RESPONSE STRUCTURE:
     "name": "Full Name with space between First and Last Name (e.g. 'Rishi Sharma') or null",
     "email": "Email Address or null",
     "phone": "Phone Number or null",
-    "location": "Current City/Location or null"
+    "location": "Current City/Location or null",
+    "linkedin": "LinkedIn profile URL or handle exactly as written in the CV (e.g. 'linkedin.com/in/rohit-kumar') or null"
   },
   "education": ["Degree/Institution listed in CV"],
   "experience": ["Work history/role listed in CV"],
