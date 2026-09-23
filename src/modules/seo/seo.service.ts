@@ -45,7 +45,7 @@ export function generateSeoDefaults(
   const canonicalUrl = fullUrl;
   const canonicalTag = `<link rel="canonical" href="${fullUrl}" />`;
 
-  const ogImage = "https://res.cloudinary.com/dr8mld4i0/image/upload/v1788165233/moksha-sewa/assets/km.jpg";
+  const ogImage = "https://bharatorganicexpo.com/assets/images/og-banner.png";
 
   const openGraphTags = `<meta property="og:title" content="${metaTitle}" />
 <meta property="og:description" content="${metaDescription}" />
