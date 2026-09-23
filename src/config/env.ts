@@ -33,7 +33,12 @@ const envSchema = z.object({
   SMTP_PASS: z.string().optional(),
   FROM_EMAIL: z.string().optional(),
   FROM_NAME: z.string().optional(),
-  CONTACT_ADMIN_EMAIL: z.string().optional(),
+  // SEO & Google Keys
+  PAGESPEED_API_KEY: z.string().optional(),
+  GA4_PROPERTY_ID: z.string().optional(),
+  SEARCH_CONSOLE_SITE_URL: z.string().optional(),
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional(),
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

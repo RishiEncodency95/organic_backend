@@ -6,6 +6,10 @@ const router = Router();
 // Auto-generation route
 router.post("/generate", seoController.generate);
 
+// Recommendation routes (Gemini AI Fixes)
+router.post("/recommendations/pages/:id", seoController.generatePageRecommendations);
+router.post("/recommendations/site", seoController.generateSiteRecommendations);
+
 // General list & create
 router.get("/", seoController.getAllSeo);
 router.post("/create", seoController.upsertSeo);
