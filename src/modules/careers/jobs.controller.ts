@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import Job from "../../models/careers/Job.model";
 import Application from "../../models/careers/Application.model";
+import { generateJobDescriptionDocx } from "./jobDoc.service";
 
 export const getJobs = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -123,6 +124,34 @@ export const getAdminJobById = async (req: Request, res: Response): Promise<void
     res.status(500).json({
       success: false,
       message: "Failed to fetch job",
+      error: (error as Error).message,
+    });
+  }
+};
+
+export const exportAdminJobDocx = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const job = await Job.findById(id);
+
+    if (!job) {
+      res.status(404).json({ success: false, message: "Job not found" });
+      return;
+    }
+
+    const buffer = await generateJobDescriptionDocx(job);
+    const filename = `${job.title.replace(/[^a-zA-Z0-9]+/g, "-").replace(/(^-|-$)+/g, "")}.docx`;
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate job description document",
       error: (error as Error).message,
     });
   }
