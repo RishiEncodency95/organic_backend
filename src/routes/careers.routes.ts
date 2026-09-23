@@ -1,5 +1,13 @@
 import { Router } from "express";
-import { getJobs, getJobBySlug, createAdminJob, updateAdminJob, deleteAdminJob } from "../modules/careers/jobs.controller";
+import {
+  getJobs,
+  getJobBySlug,
+  getAdminJobsList,
+  getAdminJobById,
+  createAdminJob,
+  updateAdminJob,
+  deleteAdminJob,
+} from "../modules/careers/jobs.controller";
 import {
   uploadCv,
   analyzeCv,
@@ -18,6 +26,7 @@ import {
 } from "../modules/careers/applications.controller";
 import { uploadCvMiddleware } from "../middlewares/uploadCv.middleware";
 import { uploadPhotoMiddleware } from "../middlewares/uploadPhoto.middleware";
+import { protect } from "../middlewares/auth.middleware";
 
 const router = Router();
 
