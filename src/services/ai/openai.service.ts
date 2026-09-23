@@ -5,6 +5,8 @@ export interface AIAnalysisOutput {
     name: string | null;
     email: string | null;
     phone: string | null;
+    /** Additional numbers found in the CV, when it lists more than one. */
+    phones?: string[];
     location: string | null;
     linkedin: string | null;
   };
@@ -86,7 +88,8 @@ REQUIRED JSON RESPONSE STRUCTURE:
   "candidate": {
     "name": "Full Name with a space between First and Last Name (e.g. 'Rohit Kumar'), in Title Case even if the CV writes it in capitals, or null",
     "email": "Email Address or null",
-    "phone": "Phone Number or null",
+    "phone": "Primary phone number exactly as written in the CV, or null",
+    "phones": ["EVERY phone number written anywhere in the CV, in the order they appear — include alternate/secondary numbers; empty array if none"],
     "location": "Current City/Location or null",
     "linkedin": "LinkedIn profile URL or handle exactly as written in the CV (e.g. 'linkedin.com/in/rohit-kumar') or null"
   },

@@ -4,6 +4,9 @@ export interface ICandidateProfile extends Document {
   name?: string;
   email?: string;
   phone?: string;
+  /** Every number the CV listed; `phone` is the one the candidate verified. */
+  phones?: string[];
+  verifiedPhone?: string;
   location?: string;
   photo?: string;
   education?: string[];
@@ -35,6 +38,8 @@ const CandidateProfileSchema: Schema = new Schema(
     name: { type: String, trim: true },
     email: { type: String, trim: true, lowercase: true, index: true },
     phone: { type: String, trim: true },
+    phones: [{ type: String, trim: true }],
+    verifiedPhone: { type: String, trim: true },
     location: { type: String, trim: true },
     photo: { type: String },
     education: [{ type: String }],
