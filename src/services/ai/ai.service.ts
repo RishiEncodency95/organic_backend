@@ -6,8 +6,10 @@ export interface UnifiedAnalysisResult {
   extractedProfile: {
     candidate: {
       name: string | null;
-      email: string | null;
       phone: string | null;
+      /** Every distinct number found in the CV; `phone` is the first of these. */
+      phones: string[];
+      email: string | null;
       location: string | null;
       linkedin: string | null;
     };
@@ -20,6 +22,7 @@ export interface UnifiedAnalysisResult {
     currentDesignation: string | null;
     totalExperience: string | null;
     noticePeriod: string | null;
+    currentCTC: string | null;
     expectedCTC: string | null;
   };
   overallScore: number;
@@ -39,6 +42,63 @@ export interface UnifiedAnalysisResult {
   gaps: string[];
   explanation: string;
 }
+
+/**
+ * A phone number as written, bounded so it cannot be cut out of a longer digit run
+ * (account numbers, ids). Separators stay loose because CVs use all of them.
+ */
+const PHONE_PATTERN = /(?<!\d)(?:\+?\d{1,3}[\s.-]?)?\(?\d{2,5}\)?[\s.-]?\d{3,5}[\s.-]?\d{3,5}(?!\d)/g;
+
+/** Last 10 digits, so "+91 98765 43210" and "9876543210" count as one number. */
+const phoneKey = (value: string) => value.replace(/\D/g, "").slice(-10);
+
+/** At most this many numbers are offered for OTP; more than that is noise. */
+const MAX_CV_PHONES = 4;
+
+/**
+ * Every distinct phone number in the CV, in the order it appears. CVs commonly
+ * carry two (personal + alternate) and the candidate picks which one receives the
+ * WhatsApp OTP, so all of them are kept rather than only the first.
+ */
+export const extractPhones = (text: string): string[] => {
+  const found: string[] = [];
+  const seen = new Set<string>();
+
+  for (const match of text.matchAll(PHONE_PATTERN)) {
+    const raw = match[0].trim();
+    const digits = raw.replace(/\D/g, "");
+    // 10 national digits, optionally behind a 1-3 digit country code.
+    if (digits.length < 10 || digits.length > 13) continue;
+
+    const key = phoneKey(raw);
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    found.push(raw);
+    if (found.length >= MAX_CV_PHONES) break;
+  }
+
+  return found;
+};
+
+/** Merges number lists in order, keeping the first spelling of each number. */
+const mergePhones = (...lists: (string | null | undefined)[][]): string[] => {
+  const merged: string[] = [];
+  const seen = new Set<string>();
+
+  for (const list of lists) {
+    for (const value of list) {
+      const raw = (value || "").trim();
+      if (!raw || raw.replace(/\D/g, "").length < 10) continue;
+      const key = phoneKey(raw);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(raw);
+    }
+  }
+
+  return merged.slice(0, MAX_CV_PHONES);
+};
 
 /**
  * Deterministic formula to calculate score strictly in code.
@@ -90,7 +150,6 @@ export const runCvAnalysisPipeline = async (
 
   // Regex extraction for contact info as secondary guarantee
   let regexEmail: string | null = null;
-  let regexPhone: string | null = null;
   let regexLinkedin: string | null = null;
 
   const emailMatch = cvText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/i);
@@ -109,10 +168,8 @@ export const runCvAnalysisPipeline = async (
       .toLowerCase();
   }
 
-  const phoneMatch = cvText.match(/(?:\+?\d{1,3}[\s-]?)?\(?\d{2,5}\)?[\s-]?\d{3,5}[\s-]?\d{3,5}/);
-  if (phoneMatch && phoneMatch[0].replace(/\D/g, "").length >= 10) {
-    regexPhone = phoneMatch[0].trim();
-  }
+  const regexPhones = extractPhones(cvText);
+  const regexPhone = regexPhones[0] || null;
 
   // 1. Try Primary Provider: OpenAI
   try {
@@ -154,6 +211,7 @@ export const runCvAnalysisPipeline = async (
           name: null,
           email: regexEmail,
           phone: regexPhone,
+          phones: regexPhones,
           linkedin: regexLinkedin,
           location: lowerCv.includes("delhi") || lowerCv.includes("noida") || lowerCv.includes("gurugram") ? "Delhi NCR" : null,
         },
@@ -166,6 +224,7 @@ export const runCvAnalysisPipeline = async (
         currentDesignation: null,
         totalExperience: null,
         noticePeriod: null,
+        currentCTC: null,
         expectedCTC: null,
         evaluation: {
           relevantExperience: { score: heuristicScore, evidence: matchedReqs },
@@ -190,7 +249,17 @@ export const runCvAnalysisPipeline = async (
 
   // Merge regex email/phone if AI returned null
   if (!aiOutput.candidate.email && regexEmail) aiOutput.candidate.email = regexEmail;
-  if (!aiOutput.candidate.phone && regexPhone) aiOutput.candidate.phone = regexPhone;
+
+  // The model reports the number it considers primary; the regex sweep finds the rest.
+  // Both are kept so the OTP step can offer every number the CV actually carries.
+  const candidatePhones = mergePhones(
+    [aiOutput.candidate.phone],
+    aiOutput.candidate.phones || [],
+    regexPhones
+  );
+  if (!aiOutput.candidate.phone && candidatePhones.length > 0) {
+    aiOutput.candidate.phone = candidatePhones[0];
+  }
 
   // 3. Compute Deterministic Match Score
   const overallScore = calculateDeterministicScore(aiOutput.evaluation);
@@ -202,6 +271,7 @@ export const runCvAnalysisPipeline = async (
     extractedProfile: {
       candidate: {
         ...(aiOutput.candidate || { name: null, email: null, phone: null, location: null, linkedin: null }),
+        phones: candidatePhones,
         // Prefer whatever the CV literally contains over a model guess.
         linkedin: regexLinkedin || aiOutput.candidate?.linkedin || null,
       },
@@ -214,6 +284,7 @@ export const runCvAnalysisPipeline = async (
       currentDesignation: aiOutput.currentDesignation || null,
       totalExperience: aiOutput.totalExperience || null,
       noticePeriod: aiOutput.noticePeriod || null,
+      currentCTC: aiOutput.currentCTC || null,
       expectedCTC: aiOutput.expectedCTC || null,
     },
     overallScore,
@@ -246,10 +317,27 @@ export const runCvAnalysisPipeline = async (
         evidence: aiOutput.evaluation.location?.evidence || [],
       },
     },
-    matchedRequirements: aiOutput.matchedRequirements || [],
+    matchedRequirements: fillToFive(
+      aiOutput.matchedRequirements || [],
+      aiOutput.strengths || [],
+      jobDescription.requirements,
+      jobDescription.skills
+    ),
     missingRequirements: aiOutput.missingRequirements || [],
     strengths: aiOutput.strengths || [],
     gaps: aiOutput.gaps || [],
     explanation: aiOutput.explanation || "CV analyzed successfully against job parameters.",
   };
 };
+
+/** The UI always shows 5 "key requirements met" bullets, so pad with strengths/job data rather than trust the model's count. */
+function fillToFive(...sources: string[][]): string[] {
+  const result: string[] = [];
+  for (const source of sources) {
+    for (const item of source) {
+      if (result.length >= 5) return result;
+      if (item && !result.includes(item)) result.push(item);
+    }
+  }
+  return result;
+}

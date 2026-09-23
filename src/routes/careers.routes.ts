@@ -1,6 +1,12 @@
 import { Router } from "express";
-import { getJobs, getJobBySlug, getAdminJobsList, getAdminJobById, createAdminJob, updateAdminJob, deleteAdminJob } from "../modules/careers/jobs.controller";
-import { uploadCv, analyzeCv, getAnalysisResult } from "../modules/careers/cv.controller";
+import { getJobs, getJobBySlug, createAdminJob, updateAdminJob, deleteAdminJob } from "../modules/careers/jobs.controller";
+import {
+  uploadCv,
+  analyzeCv,
+  getAnalysisResult,
+  uploadCandidatePhoto,
+  updateCandidateProfile,
+} from "../modules/careers/cv.controller";
 import {
   createApplication,
   getApplication,
@@ -11,7 +17,7 @@ import {
   updateAdminApplicationStatus,
 } from "../modules/careers/applications.controller";
 import { uploadCvMiddleware } from "../middlewares/uploadCv.middleware";
-import { protect } from "../middlewares/auth.middleware";
+import { uploadPhotoMiddleware } from "../middlewares/uploadPhoto.middleware";
 
 const router = Router();
 
@@ -22,6 +28,9 @@ router.get("/jobs/:slug", getJobBySlug);
 router.post("/cv/upload", uploadCvMiddleware.any(), uploadCv);
 router.post("/cv/analyze", analyzeCv);
 router.get("/analysis/:id", getAnalysisResult);
+
+router.patch("/candidates/:id", updateCandidateProfile);
+router.post("/candidates/:id/photo", uploadPhotoMiddleware.any(), uploadCandidatePhoto);
 
 router.post("/applications", createApplication);
 router.get("/applications/:id", getApplication);

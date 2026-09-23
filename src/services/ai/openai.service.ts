@@ -5,6 +5,8 @@ export interface AIAnalysisOutput {
     name: string | null;
     email: string | null;
     phone: string | null;
+    /** Additional numbers found in the CV, when it lists more than one. */
+    phones?: string[];
     location: string | null;
     linkedin: string | null;
   };
@@ -17,6 +19,7 @@ export interface AIAnalysisOutput {
   currentDesignation: string | null;
   totalExperience: string | null;
   noticePeriod: string | null;
+  currentCTC: string | null;
   expectedCTC: string | null;
 
   // Matching evaluation against Job Description
@@ -61,7 +64,7 @@ export const analyzeCvWithOpenAI = async (
 Analyze the following candidate CV text and compare it with the Job Description provided below.
 
 CRITICAL INSTRUCTIONS:
-1. NEVER invent or hallucinate information. If email, phone, location, currentCompany, currentDesignation, totalExperience, noticePeriod, or expectedCTC are NOT explicitly stated in the CV, return null.
+1. NEVER invent or hallucinate information. If email, phone, location, currentCompany, currentDesignation, totalExperience, noticePeriod, currentCTC, or expectedCTC are NOT explicitly stated in the CV, return null.
 2. Return ONLY a strictly valid JSON object adhering EXACTLY to the structure below.
 3. For skills, include ONLY skills explicitly found in the CV text.
 4. For scoring each dimension (relevantExperience, skills, education, industryExperience, roleFit, location), provide a numeric score between 0 and 100 based strictly on factual evidence in the CV compared to the Job Description.
@@ -86,7 +89,8 @@ REQUIRED JSON RESPONSE STRUCTURE:
   "candidate": {
     "name": "Full Name with a space between First and Last Name (e.g. 'Rohit Kumar'), in Title Case even if the CV writes it in capitals, or null",
     "email": "Email Address or null",
-    "phone": "Phone Number or null",
+    "phone": "Primary phone number exactly as written in the CV, or null",
+    "phones": ["EVERY phone number written anywhere in the CV, in the order they appear — include alternate/secondary numbers; empty array if none"],
     "location": "Current City/Location or null",
     "linkedin": "LinkedIn profile URL or handle exactly as written in the CV (e.g. 'linkedin.com/in/rohit-kumar') or null"
   },
@@ -99,6 +103,7 @@ REQUIRED JSON RESPONSE STRUCTURE:
   "currentDesignation": "Current job title or null",
   "totalExperience": "Years/months of total experience e.g. '5 Years' or null",
   "noticePeriod": "Notice period e.g. '30 Days' or null",
+  "currentCTC": "Current salary/CTC exactly as stated in the CV, or null if not mentioned",
   "expectedCTC": "Expected salary/CTC or null",
   "evaluation": {
     "relevantExperience": { "score": 85, "evidence": ["8 years in B2B exhibition sales"] },
