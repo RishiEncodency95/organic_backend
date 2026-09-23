@@ -181,6 +181,7 @@ export const analyzeCv = async (req: Request, res: Response): Promise<void> => {
     if (ext.currentDesignation) profile.currentDesignation = ext.currentDesignation;
     if (ext.totalExperience) profile.totalExperience = ext.totalExperience;
     if (ext.noticePeriod) profile.noticePeriod = ext.noticePeriod;
+    if (ext.currentCTC) profile.currentCTC = ext.currentCTC;
     if (ext.expectedCTC) profile.expectedCTC = ext.expectedCTC;
 
     await profile.save();

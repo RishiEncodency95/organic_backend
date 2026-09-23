@@ -19,6 +19,7 @@ export interface ICandidateProfile extends Document {
   currentDesignation?: string;
   totalExperience?: string;
   noticePeriod?: string;
+  currentCTC?: string;
   expectedCTC?: string;
   willingToRelocate?: boolean;
   cv: {
@@ -52,6 +53,7 @@ const CandidateProfileSchema: Schema = new Schema(
     currentDesignation: { type: String },
     totalExperience: { type: String },
     noticePeriod: { type: String },
+    currentCTC: { type: String },
     expectedCTC: { type: String },
     willingToRelocate: { type: Boolean, default: false },
     cv: {

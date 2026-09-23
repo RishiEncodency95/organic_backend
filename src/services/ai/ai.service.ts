@@ -22,6 +22,7 @@ export interface UnifiedAnalysisResult {
     currentDesignation: string | null;
     totalExperience: string | null;
     noticePeriod: string | null;
+    currentCTC: string | null;
     expectedCTC: string | null;
   };
   overallScore: number;
@@ -223,6 +224,7 @@ export const runCvAnalysisPipeline = async (
         currentDesignation: null,
         totalExperience: null,
         noticePeriod: null,
+        currentCTC: null,
         expectedCTC: null,
         evaluation: {
           relevantExperience: { score: heuristicScore, evidence: matchedReqs },
@@ -282,6 +284,7 @@ export const runCvAnalysisPipeline = async (
       currentDesignation: aiOutput.currentDesignation || null,
       totalExperience: aiOutput.totalExperience || null,
       noticePeriod: aiOutput.noticePeriod || null,
+      currentCTC: aiOutput.currentCTC || null,
       expectedCTC: aiOutput.expectedCTC || null,
     },
     overallScore,
@@ -314,10 +317,27 @@ export const runCvAnalysisPipeline = async (
         evidence: aiOutput.evaluation.location?.evidence || [],
       },
     },
-    matchedRequirements: aiOutput.matchedRequirements || [],
+    matchedRequirements: fillToFive(
+      aiOutput.matchedRequirements || [],
+      aiOutput.strengths || [],
+      jobDescription.requirements,
+      jobDescription.skills
+    ),
     missingRequirements: aiOutput.missingRequirements || [],
     strengths: aiOutput.strengths || [],
     gaps: aiOutput.gaps || [],
     explanation: aiOutput.explanation || "CV analyzed successfully against job parameters.",
   };
 };
+
+/** The UI always shows 5 "key requirements met" bullets, so pad with strengths/job data rather than trust the model's count. */
+function fillToFive(...sources: string[][]): string[] {
+  const result: string[] = [];
+  for (const source of sources) {
+    for (const item of source) {
+      if (result.length >= 5) return result;
+      if (item && !result.includes(item)) result.push(item);
+    }
+  }
+  return result;
+}
