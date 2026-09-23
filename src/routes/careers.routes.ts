@@ -1,9 +1,5 @@
 import { Router } from "express";
-<<<<<<< HEAD
-import { getJobs, getJobBySlug, exportJobDocx, getAdminJobsList, getAdminJobById, exportAdminJobDocx, createAdminJob, updateAdminJob, deleteAdminJob } from "../modules/careers/jobs.controller";
-import { uploadCv, analyzeCv, getAnalysisResult } from "../modules/careers/cv.controller";
-=======
-import { getJobs, getJobBySlug, getAdminJobsList, getAdminJobById, exportAdminJobDocx, createAdminJob, updateAdminJob, deleteAdminJob } from "../modules/careers/jobs.controller";
+import { getJobs, getJobBySlug, getAdminJobsList, getAdminJobById, exportAdminJobDocx, createAdminJob, updateAdminJob, deleteAdminJob, exportJobDocx } from "../modules/careers/jobs.controller";
 import {
   uploadCv,
   analyzeCv,
@@ -11,7 +7,6 @@ import {
   uploadCandidatePhoto,
   updateCandidateProfile,
 } from "../modules/careers/cv.controller";
->>>>>>> 4c1d36f348fd77ec6d0d82cbc8bc00b7924be80a
 import {
   createApplication,
   getApplication,
