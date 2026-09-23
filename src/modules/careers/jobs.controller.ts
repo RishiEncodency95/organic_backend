@@ -79,6 +79,39 @@ export const getJobBySlug = async (req: Request, res: Response): Promise<void> =
   }
 };
 
+export const exportJobDocx = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const target = String(req.params.slug);
+    let job = await Job.findOne({ slug: target, status: "OPEN" });
+
+    if (!job && /^[0-9a-fA-F]{24}$/.test(target)) {
+      job = await Job.findOne({ _id: target, status: "OPEN" });
+    }
+
+    if (!job) {
+      res.status(404).json({ success: false, message: "Active job position not found" });
+      return;
+    }
+
+    const buffer = await generateJobDescriptionDocx(job);
+    const filename = `${job.title.replace(/[^a-zA-Z0-9]+/g, "-").replace(/(^-|-$)+/g, "")}.docx`;
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    );
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Cache-Control", "no-store");
+    res.send(buffer);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate job description document",
+      error: (error as Error).message,
+    });
+  }
+};
+
 export const getAdminJobsList = async (req: Request, res: Response): Promise<void> => {
   try {
     const jobs = await Job.find({}).sort({ createdAt: -1 }).lean();

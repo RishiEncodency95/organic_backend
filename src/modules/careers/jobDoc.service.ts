@@ -365,14 +365,14 @@ function sectionHeading(text: string): Paragraph {
     keepNext: true,
     spacing: { before: 240, after: 90 },
     border: {
-      bottom: { style: BorderStyle.SINGLE, size: 8, color: COLORS.accent, space: 4 },
+      bottom: { style: BorderStyle.SINGLE, size: 8, color: COLORS.ink, space: 4 },
     },
     children: [
       new TextRun({
         text,
         bold: true,
         size: 24,
-        color: COLORS.accentDark,
+        color: COLORS.ink,
       }),
     ],
   });
@@ -586,17 +586,17 @@ export async function generateJobDescriptionDocx(job: IJob): Promise<Buffer> {
 
   children.push(
     new Paragraph({
-      alignment: AlignmentType.LEFT,
+      alignment: AlignmentType.CENTER,
       spacing: { after: 150 },
       border: {
-        bottom: { style: BorderStyle.SINGLE, size: 14, color: COLORS.accent, space: 7 },
+        bottom: { style: BorderStyle.SINGLE, size: 14, color: COLORS.ink, space: 7 },
       },
       children: [
         new TextRun({
           text: designation,
           bold: true,
           size: 34,
-          color: COLORS.accentDark,
+          color: COLORS.ink,
         }),
       ],
     }),
