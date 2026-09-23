@@ -9,6 +9,7 @@ export interface UnifiedAnalysisResult {
       email: string | null;
       phone: string | null;
       location: string | null;
+      linkedin: string | null;
     };
     education: string[];
     experience: string[];
@@ -90,9 +91,23 @@ export const runCvAnalysisPipeline = async (
   // Regex extraction for contact info as secondary guarantee
   let regexEmail: string | null = null;
   let regexPhone: string | null = null;
+  let regexLinkedin: string | null = null;
 
   const emailMatch = cvText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/i);
   if (emailMatch) regexEmail = emailMatch[0];
+
+  // LinkedIn is a fixed URL shape, so a regex is more dependable than the model —
+  // it also backfills when the AI omits the field.
+  const linkedinMatch = cvText.match(
+    /(?:https?:\/\/)?(?:[a-z]{2,3}\.)?linkedin\.com\/(?:in|pub)\/[A-Za-z0-9._%+-]+\/?/i
+  );
+  if (linkedinMatch) {
+    regexLinkedin = linkedinMatch[0]
+      .replace(/^https?:\/\//i, "")
+      .replace(/^www\./i, "")
+      .replace(/\/$/, "")
+      .toLowerCase();
+  }
 
   const phoneMatch = cvText.match(/(?:\+?\d{1,3}[\s-]?)?\(?\d{2,5}\)?[\s-]?\d{3,5}[\s-]?\d{3,5}/);
   if (phoneMatch && phoneMatch[0].replace(/\D/g, "").length >= 10) {
@@ -139,6 +154,7 @@ export const runCvAnalysisPipeline = async (
           name: null,
           email: regexEmail,
           phone: regexPhone,
+          linkedin: regexLinkedin,
           location: lowerCv.includes("delhi") || lowerCv.includes("noida") || lowerCv.includes("gurugram") ? "Delhi NCR" : null,
         },
         education: [],
@@ -184,7 +200,11 @@ export const runCvAnalysisPipeline = async (
   return {
     provider,
     extractedProfile: {
-      candidate: aiOutput.candidate || { name: null, email: null, phone: null, location: null },
+      candidate: {
+        ...(aiOutput.candidate || { name: null, email: null, phone: null, location: null, linkedin: null }),
+        // Prefer whatever the CV literally contains over a model guess.
+        linkedin: regexLinkedin || aiOutput.candidate?.linkedin || null,
+      },
       education: aiOutput.education || [],
       experience: aiOutput.experience || [],
       skills: aiOutput.skills || [],
