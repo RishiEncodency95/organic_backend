@@ -51,6 +51,13 @@ export const createApplication = async (req: Request, res: Response): Promise<vo
       if (candidateData.name) candidate.name = candidateData.name;
       if (candidateData.email) candidate.email = candidateData.email;
       if (candidateData.phone) candidate.phone = candidateData.phone;
+      // Set on the eligibility screen: the photo the candidate added and every number
+      // their CV listed, including the one the WhatsApp OTP proved.
+      if (candidateData.photo) candidate.photo = candidateData.photo;
+      if (candidateData.verifiedPhone) candidate.verifiedPhone = candidateData.verifiedPhone;
+      if (Array.isArray(candidateData.phones) && candidateData.phones.length > 0) {
+        candidate.phones = candidateData.phones;
+      }
       if (candidateData.location) candidate.location = candidateData.location;
       if (candidateData.currentCompany !== undefined) candidate.currentCompany = candidateData.currentCompany;
       if (candidateData.currentDesignation !== undefined) candidate.currentDesignation = candidateData.currentDesignation;
@@ -214,6 +221,13 @@ export const submitApplication = async (req: Request, res: Response): Promise<vo
       if (candidateData.name) candidate.name = candidateData.name;
       if (candidateData.email) candidate.email = candidateData.email;
       if (candidateData.phone) candidate.phone = candidateData.phone;
+      // Set on the eligibility screen: the photo the candidate added and every number
+      // their CV listed, including the one the WhatsApp OTP proved.
+      if (candidateData.photo) candidate.photo = candidateData.photo;
+      if (candidateData.verifiedPhone) candidate.verifiedPhone = candidateData.verifiedPhone;
+      if (Array.isArray(candidateData.phones) && candidateData.phones.length > 0) {
+        candidate.phones = candidateData.phones;
+      }
       if (candidateData.location) candidate.location = candidateData.location;
       if (candidateData.currentCompany !== undefined) candidate.currentCompany = candidateData.currentCompany;
       if (candidateData.currentDesignation !== undefined) candidate.currentDesignation = candidateData.currentDesignation;

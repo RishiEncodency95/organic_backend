@@ -2,7 +2,10 @@ import { Request, Response } from "express";
 import CandidateProfile from "../../models/careers/CandidateProfile.model";
 import Job from "../../models/careers/Job.model";
 import CvAnalysis from "../../models/careers/CvAnalysis.model";
-import { uploadCvToCloudinary } from "../../services/cloudinary.service";
+import {
+  uploadCvToCloudinary,
+  uploadCandidatePhotoToCloudinary,
+} from "../../services/cloudinary.service";
 import { extractTextFromCv } from "../../services/cvTextExtractor.service";
 import { runCvAnalysisPipeline } from "../../services/ai/ai.service";
 
@@ -161,6 +164,12 @@ export const analyzeCv = async (req: Request, res: Response): Promise<void> => {
     if (ext.candidate.name) profile.name = ext.candidate.name;
     if (ext.candidate.email) profile.email = ext.candidate.email;
     if (ext.candidate.phone) profile.phone = ext.candidate.phone;
+    // The whole list is stored so the OTP step can offer each number for verification.
+    if (ext.candidate.phones && ext.candidate.phones.length > 0) {
+      profile.phones = ext.candidate.phones;
+    } else if (ext.candidate.phone) {
+      profile.phones = [ext.candidate.phone];
+    }
     if (ext.candidate.location) profile.location = ext.candidate.location;
     if (ext.candidate.linkedin) profile.linkedin = ext.candidate.linkedin;
     if (ext.education && ext.education.length > 0) profile.education = ext.education;
@@ -172,6 +181,7 @@ export const analyzeCv = async (req: Request, res: Response): Promise<void> => {
     if (ext.currentDesignation) profile.currentDesignation = ext.currentDesignation;
     if (ext.totalExperience) profile.totalExperience = ext.totalExperience;
     if (ext.noticePeriod) profile.noticePeriod = ext.noticePeriod;
+    if (ext.currentCTC) profile.currentCTC = ext.currentCTC;
     if (ext.expectedCTC) profile.expectedCTC = ext.expectedCTC;
 
     await profile.save();
@@ -244,6 +254,120 @@ export const getAnalysisResult = async (req: Request, res: Response): Promise<vo
     res.status(500).json({
       success: false,
       message: "Failed to fetch analysis record.",
+      error: (error as Error).message,
+    });
+  }
+};
+
+/**
+ * Saves the candidate's profile photo against their CV record.
+ * POST /careers/candidates/:id/photo
+ */
+export const uploadCandidatePhoto = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const file = req.file || (req.files && Array.isArray(req.files) ? req.files[0] : undefined);
+
+    if (!file) {
+      res.status(400).json({ success: false, message: "Please attach a photo." });
+      return;
+    }
+
+    if (!file.mimetype.startsWith("image/")) {
+      res.status(400).json({
+        success: false,
+        message: "Invalid file type. Only JPG, PNG and WEBP photos are allowed.",
+      });
+      return;
+    }
+
+    const profile = await CandidateProfile.findById(id);
+    if (!profile) {
+      res.status(404).json({ success: false, message: "Candidate profile not found." });
+      return;
+    }
+
+    const uploadResult = await uploadCandidatePhotoToCloudinary(
+      file.buffer,
+      file.originalname,
+      file.mimetype
+    );
+
+    if (!uploadResult.url) {
+      res.status(502).json({
+        success: false,
+        message: "Your photo could not be stored right now. Please try again.",
+      });
+      return;
+    }
+
+    profile.photo = uploadResult.url;
+    await profile.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Profile photo saved successfully.",
+      data: {
+        candidateId: profile._id.toString(),
+        photo: profile.photo,
+        url: uploadResult.url,
+        publicId: uploadResult.publicId,
+      },
+    });
+  } catch (error) {
+    console.error("Candidate photo upload error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Your photo could not be uploaded right now. Please try again.",
+      error: (error as Error).message,
+    });
+  }
+};
+
+/**
+ * Persists the contact details the candidate corrected on the eligibility screen,
+ * including which number the WhatsApp OTP was verified against.
+ * PATCH /careers/candidates/:id
+ */
+export const updateCandidateProfile = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { name, email, phone, phones, verifiedPhone, linkedin, photo } = req.body;
+
+    const profile = await CandidateProfile.findById(id);
+    if (!profile) {
+      res.status(404).json({ success: false, message: "Candidate profile not found." });
+      return;
+    }
+
+    if (typeof name === "string" && name.trim()) profile.name = name.trim();
+    if (typeof email === "string" && email.trim()) profile.email = email.trim();
+    if (typeof phone === "string" && phone.trim()) profile.phone = phone.trim();
+    if (typeof verifiedPhone === "string" && verifiedPhone.trim()) {
+      profile.verifiedPhone = verifiedPhone.trim();
+    }
+    if (typeof linkedin === "string") profile.linkedin = linkedin.trim();
+    if (typeof photo === "string" && photo.trim()) profile.photo = photo.trim();
+    if (Array.isArray(phones)) {
+      const cleaned = phones
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter(Boolean);
+      if (cleaned.length > 0) profile.phones = cleaned;
+    }
+
+    await profile.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Candidate profile updated successfully.",
+      data: profile,
+    });
+  } catch (error) {
+    console.error("Candidate profile update error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Your details could not be saved right now. Please try again.",
       error: (error as Error).message,
     });
   }
