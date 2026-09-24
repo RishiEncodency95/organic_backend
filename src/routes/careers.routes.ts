@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getJobs, getJobBySlug, getAdminJobsList, getAdminJobById, exportAdminJobDocx, createAdminJob, updateAdminJob, deleteAdminJob } from "../modules/careers/jobs.controller";
+import { getJobs, getJobBySlug, exportJobDocx, getAdminJobsList, getAdminJobById, exportAdminJobDocx, createAdminJob, updateAdminJob, deleteAdminJob } from "../modules/careers/jobs.controller";
 import {
   uploadCv,
   analyzeCv,
@@ -24,6 +24,7 @@ const router = Router();
 
 // PUBLIC CAREERS APIS
 router.get("/jobs", getJobs);
+router.get("/jobs/:slug/export", exportJobDocx);
 router.get("/jobs/:slug", getJobBySlug);
 
 router.post("/cv/upload", uploadCvMiddleware.any(), uploadCv);

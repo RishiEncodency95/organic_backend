@@ -9,6 +9,8 @@ export interface ICandidateProfile extends Document {
   verifiedPhone?: string;
   location?: string;
   photo?: string;
+  /** Only set when the CV explicitly states it — never inferred from the name. */
+  gender?: "male" | "female";
   education?: string[];
   experience?: string[];
   skills?: string[];
@@ -43,6 +45,7 @@ const CandidateProfileSchema: Schema = new Schema(
     verifiedPhone: { type: String, trim: true },
     location: { type: String, trim: true },
     photo: { type: String },
+    gender: { type: String, enum: ["male", "female"] },
     education: [{ type: String }],
     experience: [{ type: String }],
     skills: [{ type: String }],

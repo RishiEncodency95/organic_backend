@@ -22,8 +22,8 @@ const DEFAULT_NOMINATION_HERO_DATA = {
   location: "Hall 12, Bharat Mandapam, PRAGATI MAIDAN, NEW DELHI, INDIA",
   venueLine1: "Hall 12, Bharat Mandapam",
   venueLine2: "PRAGATI MAIDAN, NEW DELHI, INDIA",
-  image: "https://res.cloudinary.com/dr8mld4i0/image/upload/v1788165233/moksha-sewa/assets/km.jpg",
-  bgImage: "https://res.cloudinary.com/dr8mld4i0/image/upload/v1788165233/moksha-sewa/assets/km.jpg",
+  image: "",
+  bgImage: "",
 };
 
 export const getAwardsNominationHeroService = async () => {

@@ -43,7 +43,7 @@ const introductionSectionSchema = new Schema<IIntroductionSection>(
     image: {
       type: String,
       default:
-        "https://res.cloudinary.com/dr8mld4i0/image/upload/v1788165233/moksha-sewa/assets/km.jpg",
+        "",
     },
     imageAlt: {
       type: String,
