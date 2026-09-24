@@ -191,6 +191,7 @@ export const analyzeCv = async (req: Request, res: Response): Promise<void> => {
     }
     if (ext.candidate.location) profile.location = ext.candidate.location;
     if (ext.candidate.linkedin) profile.linkedin = ext.candidate.linkedin;
+    if (ext.candidate.gender) profile.gender = ext.candidate.gender;
     if (ext.education && ext.education.length > 0) profile.education = ext.education;
     if (ext.experience && ext.experience.length > 0) profile.experience = ext.experience;
     if (ext.skills && ext.skills.length > 0) profile.skills = ext.skills;
