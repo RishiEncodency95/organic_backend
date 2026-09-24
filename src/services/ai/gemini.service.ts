@@ -23,7 +23,7 @@ export const analyzeCvWithGemini = async (
 Analyze the following candidate CV text and compare it with the Job Description provided below.
 
 CRITICAL INSTRUCTIONS:
-1. NEVER invent or hallucinate information. If email, phone, location, currentCompany, currentDesignation, totalExperience, noticePeriod, currentCTC, or expectedCTC are NOT explicitly stated in the CV, return null.
+1. NEVER invent or hallucinate information. If email, phone, location, currentCompany, currentDesignation, totalExperience, noticePeriod, currentCTC, expectedCTC, or gender are NOT explicitly stated in the CV, return null.
 2. Return ONLY raw JSON without markdown formatting or code blocks.
 3. For skills, include ONLY skills explicitly found in the CV text.
 4. For scoring each dimension (relevantExperience, skills, education, industryExperience, roleFit, location), provide a numeric score between 0 and 100 based strictly on factual evidence in the CV compared to the Job Description.
@@ -51,7 +51,8 @@ REQUIRED JSON RESPONSE STRUCTURE:
     "phone": "Primary phone number exactly as written in the CV, or null",
     "phones": ["EVERY phone number written anywhere in the CV, in the order they appear — include alternate/secondary numbers; empty array if none"],
     "location": "Current City/Location or null",
-    "linkedin": "LinkedIn profile URL or handle exactly as written in the CV (e.g. 'linkedin.com/in/rohit-kumar') or null"
+    "linkedin": "LinkedIn profile URL or handle exactly as written in the CV (e.g. 'linkedin.com/in/rohit-kumar') or null",
+    "gender": "'male' or 'female' ONLY if the CV has an explicit gender/sex field stating it — never inferred from the name, otherwise null"
   },
   "education": ["Degree/Institution listed in CV"],
   "experience": ["Work history/role listed in CV"],
@@ -81,6 +82,8 @@ REQUIRED JSON RESPONSE STRUCTURE:
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
+  // Plain fetch never times out on its own, so a stalled connection here would
+  // hang /cv/analyze forever — bound it so the pipeline can fail over instead.
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -91,6 +94,7 @@ REQUIRED JSON RESPONSE STRUCTURE:
         temperature: 0.1,
       },
     }),
+    signal: AbortSignal.timeout(20_000),
   });
 
   if (!response.ok) {

@@ -12,6 +12,7 @@ export interface UnifiedAnalysisResult {
       email: string | null;
       location: string | null;
       linkedin: string | null;
+      gender: "male" | "female" | null;
     };
     education: string[];
     experience: string[];
@@ -214,6 +215,7 @@ export const runCvAnalysisPipeline = async (
           phones: regexPhones,
           linkedin: regexLinkedin,
           location: lowerCv.includes("delhi") || lowerCv.includes("noida") || lowerCv.includes("gurugram") ? "Delhi NCR" : null,
+          gender: null,
         },
         education: [],
         experience: [],
@@ -270,10 +272,11 @@ export const runCvAnalysisPipeline = async (
     provider,
     extractedProfile: {
       candidate: {
-        ...(aiOutput.candidate || { name: null, email: null, phone: null, location: null, linkedin: null }),
+        ...(aiOutput.candidate || { name: null, email: null, phone: null, location: null, linkedin: null, gender: null }),
         phones: candidatePhones,
         // Prefer whatever the CV literally contains over a model guess.
         linkedin: regexLinkedin || aiOutput.candidate?.linkedin || null,
+        gender: aiOutput.candidate?.gender || null,
       },
       education: aiOutput.education || [],
       experience: aiOutput.experience || [],
