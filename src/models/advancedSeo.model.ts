@@ -23,6 +23,9 @@ export interface IAdvancedSeo extends Document {
   footerScripts: string;
   seoFiles: ISeoFile[];
   socialLinks: ISocialLinks;
+  ga4MeasurementId?: string;
+  gtmContainerId?: string;
+  googleSearchConsoleVerification?: string;
   updatedBy?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +45,12 @@ const advancedSeoSchema = new Schema<IAdvancedSeo>(
     headerScripts: { type: String, default: "" },
     footerScripts: { type: String, default: "" },
     seoFiles: { type: [seoFileSchema], default: [] },
+    ga4MeasurementId: { type: String, default: "G-PP5N4MZBL9" },
+    gtmContainerId: { type: String, default: "GTM-TG73QDSZ" },
+    googleSearchConsoleVerification: {
+      type: String,
+      default: "LSfGa6XOQVOXKM-Z4Xq_8JK-j6DRfoxnR-QFCnzsXQU",
+    },
     socialLinks: {
       facebook: {
         type: String,

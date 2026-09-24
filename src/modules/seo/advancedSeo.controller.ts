@@ -43,6 +43,11 @@ export const advancedSeoController = {
           headerScripts: record.headerScripts || "",
           footerScripts: record.footerScripts || "",
           seoFiles: record.seoFiles || [],
+          ga4MeasurementId: record.ga4MeasurementId || "G-PP5N4MZBL9",
+          gtmContainerId: record.gtmContainerId || "GTM-TG73QDSZ",
+          googleSearchConsoleVerification:
+            record.googleSearchConsoleVerification ||
+            "LSfGa6XOQVOXKM-Z4Xq_8JK-j6DRfoxnR-QFCnzsXQU",
           socialLinks: record.socialLinks || defaultSocial,
         },
       });
@@ -57,7 +62,14 @@ export const advancedSeoController = {
   // PUT /api/seo-settings/scripts
   async updateScripts(req: Request, res: Response) {
     try {
-      const { headerScripts, footerScripts, socialLinks } = req.body;
+      const {
+        headerScripts,
+        footerScripts,
+        socialLinks,
+        ga4MeasurementId,
+        gtmContainerId,
+        googleSearchConsoleVerification,
+      } = req.body;
       let record = await AdvancedSeo.findOne();
       if (!record) {
         record = new AdvancedSeo();
@@ -65,6 +77,11 @@ export const advancedSeoController = {
 
       record.headerScripts = typeof headerScripts === "string" ? headerScripts : record.headerScripts;
       record.footerScripts = typeof footerScripts === "string" ? footerScripts : record.footerScripts;
+      if (typeof ga4MeasurementId === "string") record.ga4MeasurementId = ga4MeasurementId.trim();
+      if (typeof gtmContainerId === "string") record.gtmContainerId = gtmContainerId.trim();
+      if (typeof googleSearchConsoleVerification === "string")
+        record.googleSearchConsoleVerification = googleSearchConsoleVerification.trim();
+
       if (socialLinks && typeof socialLinks === "object") {
         record.socialLinks = {
           facebook: typeof socialLinks.facebook === "string" ? socialLinks.facebook.trim() : (record.socialLinks?.facebook || ""),
@@ -85,6 +102,9 @@ export const advancedSeoController = {
           headerScripts: record.headerScripts,
           footerScripts: record.footerScripts,
           seoFiles: record.seoFiles,
+          ga4MeasurementId: record.ga4MeasurementId,
+          gtmContainerId: record.gtmContainerId,
+          googleSearchConsoleVerification: record.googleSearchConsoleVerification,
           socialLinks: record.socialLinks,
         },
       });
