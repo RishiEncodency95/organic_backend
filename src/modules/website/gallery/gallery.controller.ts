@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import * as galleryService from "./gallery.service";
 
 export const getItems = async (req: Request, res: Response) => {
@@ -95,6 +96,28 @@ export const deleteItem = async (req: Request, res: Response) => {
     return res.status(500).json({
       status: "error",
       message: error.message || "Failed to delete gallery item",
+    });
+  }
+};
+
+export const bulkDeleteItems = async (req: Request, res: Response) => {
+  try {
+    const ids = req.body?.ids;
+    if (!Array.isArray(ids) || ids.length === 0 || !ids.every((id) => typeof id === "string" && mongoose.isValidObjectId(id))) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Provide a non-empty array of valid gallery item ids in `ids`.",
+      });
+    }
+    const deletedCount = await galleryService.bulkDeleteGalleryItems(ids);
+    return res.status(200).json({
+      status: "success",
+      deletedCount,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      status: "error",
+      message: error.message || "Failed to delete gallery items",
     });
   }
 };

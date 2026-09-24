@@ -177,6 +177,11 @@ export const deleteGalleryItem = async (id: string) => {
   return GalleryItem.findByIdAndDelete(id);
 };
 
+export const bulkDeleteGalleryItems = async (ids: string[]) => {
+  const result = await GalleryItem.deleteMany({ _id: { $in: ids } });
+  return result.deletedCount ?? 0;
+};
+
 export const getGalleryMeta = async () => {
   let meta = await GalleryMeta.findOne({ key: "default_gallery_config" });
   if (!meta) {

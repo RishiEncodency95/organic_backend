@@ -18,6 +18,7 @@ router.post("/meta", galleryController.saveMeta);
 // Gallery Items
 router.get("/items", galleryController.getItems);
 router.post("/items", galleryController.createItem);
+router.post("/items/bulk-delete", galleryController.bulkDeleteItems);
 router.put("/items/:id", galleryController.updateItem);
 router.patch("/items/:id/status", galleryController.updateStatus);
 router.delete("/items/:id", galleryController.deleteItem);
