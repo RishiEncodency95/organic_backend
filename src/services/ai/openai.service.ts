@@ -58,7 +58,9 @@ export const analyzeCvWithOpenAI = async (
     throw new Error("OPENAI_API_KEY is not configured");
   }
 
-  const openai = new OpenAI({ apiKey });
+  // Without a bounded timeout, a stalled connection to OpenAI hangs the whole
+  // /cv/analyze request indefinitely instead of falling through to Gemini.
+  const openai = new OpenAI({ apiKey, timeout: 20_000, maxRetries: 1 });
 
   const prompt = `You are an expert HR recruiter & CV analyzer for Bharat Organic Expo 2027.
 Analyze the following candidate CV text and compare it with the Job Description provided below.

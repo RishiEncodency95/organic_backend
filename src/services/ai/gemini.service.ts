@@ -81,6 +81,8 @@ REQUIRED JSON RESPONSE STRUCTURE:
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
+  // Plain fetch never times out on its own, so a stalled connection here would
+  // hang /cv/analyze forever — bound it so the pipeline can fail over instead.
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -91,6 +93,7 @@ REQUIRED JSON RESPONSE STRUCTURE:
         temperature: 0.1,
       },
     }),
+    signal: AbortSignal.timeout(20_000),
   });
 
   if (!response.ok) {

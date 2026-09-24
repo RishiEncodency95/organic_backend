@@ -7,6 +7,7 @@ import {
   uploadCandidatePhotoToCloudinary,
 } from "../../services/cloudinary.service";
 import { extractTextFromCv } from "../../services/cvTextExtractor.service";
+import { extractPhotoFromCv } from "../../services/cvPhotoExtractor.service";
 import { runCvAnalysisPipeline } from "../../services/ai/ai.service";
 
 export const uploadCv = async (req: Request, res: Response): Promise<void> => {
@@ -54,6 +55,23 @@ export const uploadCv = async (req: Request, res: Response): Promise<void> => {
     // 2. Extract CV text
     const rawText = await extractTextFromCv(file.buffer, file.mimetype, file.originalname);
 
+    // 2b. Best-effort: pull out a headshot already embedded in the CV so the candidate
+    // is not asked to upload one separately. Never blocks the upload on failure.
+    let extractedPhotoUrl: string | undefined;
+    try {
+      const extractedPhoto = await extractPhotoFromCv(file.buffer, file.mimetype, file.originalname);
+      if (extractedPhoto) {
+        const photoUpload = await uploadCandidatePhotoToCloudinary(
+          extractedPhoto.buffer,
+          `cv_photo_${file.originalname}`,
+          extractedPhoto.contentType
+        );
+        extractedPhotoUrl = photoUpload.url || undefined;
+      }
+    } catch (photoError) {
+      console.warn("⚠️ Could not extract a photo from the CV:", (photoError as Error).message);
+    }
+
     // 3. Create Candidate Profile in MongoDB
     const profile = await CandidateProfile.create({
       cv: {
@@ -64,6 +82,7 @@ export const uploadCv = async (req: Request, res: Response): Promise<void> => {
         fileSize: uploadResult.bytes,
         rawText,
       },
+      ...(extractedPhotoUrl ? { photo: extractedPhotoUrl } : {}),
     });
 
     res.status(200).json({
