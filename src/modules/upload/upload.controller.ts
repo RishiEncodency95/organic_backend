@@ -3,8 +3,22 @@ import cloudinary, { isCloudinaryConfigured } from "../../config/cloudinary";
 import asyncHandler from "../../utils/asyncHandler";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { ApiError } from "../../utils/ApiError";
+import Settings from "../../models/settings.model";
 import fs from "fs";
 import path from "path";
+
+const DEFAULT_MAX_IMAGE_UPLOAD_KB = 500;
+
+async function getMaxImageUploadSizeKB(): Promise<number> {
+  try {
+    const doc = await Settings.findOne({ website: "Organicexpo" }).lean();
+    const configured = (doc?.data as Record<string, any> | undefined)?.maxImageUploadSizeKB;
+    const parsed = Number(configured);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MAX_IMAGE_UPLOAD_KB;
+  } catch {
+    return DEFAULT_MAX_IMAGE_UPLOAD_KB;
+  }
+}
 
 /**
  * Upload single file (Cloudinary primary, local fallback)
@@ -14,6 +28,16 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
   const file = req.file;
   if (!file) {
     throw ApiError.badRequest("No file uploaded. Please attach a file.");
+  }
+
+  if (file.mimetype.startsWith("image/")) {
+    const maxKB = await getMaxImageUploadSizeKB();
+    const fileKB = file.size / 1024;
+    if (fileKB > maxKB) {
+      throw ApiError.badRequest(
+        `File size is too large (${fileKB.toFixed(0)} KB). Please reduce the file size — images larger than ${maxKB} KB cannot be uploaded.`
+      );
+    }
   }
 
   const folder = (req.query.folder as string) || "bharat-organic/content";
