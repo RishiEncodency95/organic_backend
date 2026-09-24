@@ -8,7 +8,7 @@ const DEFAULT_GALLERY_HERO = {
   shortDescription:
     "Relive the inspiring moments from past editions of Organic Expo where experts, researchers and industry leaders came together to shape the future of organic trade and sustainable living.",
   rightImage:
-    "https://res.cloudinary.com/dr8mld4i0/image/upload/v1788165233/moksha-sewa/assets/km.jpg",
+    "",
 };
 
 export const getGalleryHeroService = async () => {

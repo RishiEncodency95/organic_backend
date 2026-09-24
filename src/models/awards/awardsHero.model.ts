@@ -31,7 +31,7 @@ const awardsHeroSchema = new Schema(
     location: { type: String, default: "Hall 12, Bharat Mandapam, PRAGATI MAIDAN, NEW DELHI, INDIA" },
     venueLine1: { type: String, default: "Hall 12, Bharat Mandapam" },
     venueLine2: { type: String, default: "PRAGATI MAIDAN, NEW DELHI, INDIA" },
-    image: { type: String, default: "https://res.cloudinary.com/dr8mld4i0/image/upload/v1788165233/moksha-sewa/assets/km.jpg" },
+    image: { type: String, default: "" },
     buttonLabel: { type: String, default: "NOMINATE NOW" },
     buttonHref: { type: String, default: "/awards/nominations" },
     secondaryButtonLabel: { type: String, default: "VIEW CATEGORIES" },
