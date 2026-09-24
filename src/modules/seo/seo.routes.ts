@@ -11,6 +11,7 @@ router.post("/recommendations/pages/:id", seoController.generatePageRecommendati
 router.post("/recommendations/site", seoController.generateSiteRecommendations);
 
 // General list & create
+router.get("/pages", seoController.getSeoPages);
 router.get("/", seoController.getAllSeo);
 router.post("/create", seoController.upsertSeo);
 router.put("/update/:id", seoController.upsertSeo);
