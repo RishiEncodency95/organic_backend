@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getJobs, getJobBySlug, exportJobDocx, getAdminJobsList, getAdminJobById, exportAdminJobDocx, createAdminJob, updateAdminJob, deleteAdminJob } from "../modules/careers/jobs.controller";
+import { getJobs, getJobBySlug, exportJobDocx, getAdminJobsList, getAdminJobById, exportAdminJobDocx, createAdminJob, updateAdminJob, deleteAdminJob, generateJobDescription } from "../modules/careers/jobs.controller";
 import {
   uploadCv,
   analyzeCv,
@@ -43,6 +43,7 @@ router.post("/applications/:id/submit", submitApplication);
 router.get("/admin/jobs", protect, getAdminJobsList);
 router.get("/admin/jobs/:id", protect, getAdminJobById);
 router.get("/admin/jobs/:id/export", protect, exportAdminJobDocx);
+router.post("/admin/jobs/generate-description", protect, generateJobDescription);
 router.post("/admin/jobs", protect, createAdminJob);
 router.patch("/admin/jobs/:id", protect, updateAdminJob);
 router.delete("/admin/jobs/:id", protect, deleteAdminJob);
