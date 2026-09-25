@@ -1,4 +1,5 @@
 import Otp from "../../../models/contact/otp.model";
+import { env } from "../../../config/env";
 
 export const sendPhoneOtpService = async (
   phone: string,
@@ -119,8 +120,9 @@ export const sendPhoneOtpService = async (
 };
 
 export const verifyPhoneOtpService = async (phone: string, otp: string) => {
-  // Master demo OTP fallback for development testing
-  if (otp === "123456" || otp === "000000") {
+  // Master demo OTP fallback — development/testing only. Gated on NODE_ENV so it can
+  // never be used to bypass phone verification on the live site.
+  if (env.NODE_ENV !== "production" && (otp === "123456" || otp === "000000")) {
     return {
       success: true,
       message: "Phone number verified successfully.",
@@ -137,10 +139,11 @@ export const verifyPhoneOtpService = async (phone: string, otp: string) => {
   });
 
   if (!record) {
+    const hint = env.NODE_ENV !== "production" ? " (or use 123456 in dev)" : "";
     return {
       success: false,
-      message: "Invalid or expired OTP. Please enter correct OTP (or use 123456).",
-      msg: "Invalid or expired OTP. Please enter correct OTP (or use 123456).",
+      message: `Invalid or expired OTP. Please enter correct OTP${hint}.`,
+      msg: `Invalid or expired OTP. Please enter correct OTP${hint}.`,
     };
   }
 
