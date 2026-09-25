@@ -98,6 +98,7 @@ export const loginService = async (data: LoginInput) => {
           name: admin.name,
           email: admin.email,
           role: admin.role,
+          roleName: admin.roleName,
           avatarUrl: admin.avatarUrl,
         },
       };
@@ -137,6 +138,7 @@ export const loginService = async (data: LoginInput) => {
       name: admin.name,
       email: admin.email,
       role: admin.role,
+      roleName: admin.roleName,
       avatarUrl: admin.avatarUrl,
     },
   };
@@ -194,6 +196,7 @@ export const verify2FAService = async (token: string, tempToken?: string) => {
       name: admin.name,
       email: admin.email,
       role: admin.role,
+      roleName: admin.roleName,
     },
   };
 };

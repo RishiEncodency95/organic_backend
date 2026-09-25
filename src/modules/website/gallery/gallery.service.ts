@@ -147,20 +147,23 @@ export const DEFAULT_GALLERY_ITEMS = [
 ];
 
 export const getGalleryItems = async () => {
-  return GalleryItem.find().sort({ order: 1, createdAt: -1 });
+  // Highest order = most recently uploaded = shown first, both in the admin table and the
+  // live gallery.
+  return GalleryItem.find().sort({ order: -1, createdAt: -1 });
 };
 
 export const createGalleryItem = async (data: any) => {
-  // Respect an explicit, valid order from the admin (manual reordering); otherwise assign
-  // the next one automatically. A previous bug had the client always send a stale count,
-  // so every item in a batch ended up with the same order — guard against that here too by
-  // only trusting a positive finite number.
-  const requestedOrder = Number(data.order);
-  if (Number.isFinite(requestedOrder) && requestedOrder > 0) {
+  // Order is a simple, human-friendly counter: 1, 2, 3, 4... Respect an explicit order from
+  // the admin (manual reordering); otherwise auto-assign the next number after the current
+  // highest, so each new upload gets a bigger number than everything before it — and since
+  // the list is sorted by order descending, the biggest number (the newest upload) is always
+  // first.
+  const requestedOrder = data.order === undefined || data.order === null || data.order === "" ? NaN : Number(data.order);
+  if (Number.isFinite(requestedOrder)) {
     data.order = requestedOrder;
   } else {
     const highest = await GalleryItem.findOne().sort({ order: -1 });
-    data.order = highest && highest.order ? highest.order + 1 : 1;
+    data.order = highest && typeof highest.order === "number" ? highest.order + 1 : 1;
   }
   if (!data.title || data.title.trim() === "") {
     data.title = data.category || "Photo Asset";
