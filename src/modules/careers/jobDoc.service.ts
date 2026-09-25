@@ -18,7 +18,7 @@ import {
 import { IJob } from "../../models/careers/Job.model";
 
 type MetricRow = [label: string, detail: string];
-type RoleFamily = "sales" | "marketing" | "operations" | "engineering" | "general";
+type RoleFamily = "sales" | "marketing" | "hr" | "operations" | "engineering" | "general";
 
 interface RoleProfile {
   reportingTo: string;
@@ -164,6 +164,49 @@ const ROLE_PROFILES: Record<RoleFamily, RoleProfile> = {
       "Media & Publishing",
       "FMCG",
       "Wellness & Lifestyle Brands",
+    ],
+  },
+  hr: {
+    reportingTo: "Head - Human Resources",
+    roleObjective: (designation, project) =>
+      `The ${designation} will lead role-appropriate people and HR priorities for ${project}, including talent acquisition, employee relations, performance management, workforce records and statutory compliance. The role will support managers and employees with consistent HR processes, timely issue resolution and reliable people reporting.`,
+    kras: [
+      ["Workforce Planning", "Timely staffing plans aligned with approved business requirements"],
+      ["Talent Acquisition", "Quality hiring completed within agreed role timelines"],
+      ["Employee Relations", "Fair and timely resolution of employee concerns"],
+      ["Performance Management", "Consistent completion of goal and review cycles"],
+      ["HR Compliance", "Accurate adherence to policies and statutory requirements"],
+      ["Learning & Development", "Relevant capability-building plans completed on schedule"],
+      ["HR Records", "Complete and accurate employee records and documentation"],
+      ["Retention & Engagement", "Actionable initiatives supporting engagement and retention"],
+    ],
+    kpis: [
+      ["Hiring Turnaround", "Average days taken to close approved vacancies"],
+      ["Vacancy Fulfilment", "% of approved positions filled within target time"],
+      ["Offer Acceptance", "% of issued offers accepted by selected candidates"],
+      ["Employee Retention", "Retention rate and analysis of avoidable attrition"],
+      ["Grievance Closure", "% of employee concerns resolved within agreed timelines"],
+      ["Review Completion", "% of performance reviews completed on schedule"],
+      ["Compliance Accuracy", "Accuracy and timeliness of statutory and HR documentation"],
+      ["Training Completion", "% of planned employee learning actions completed"],
+    ],
+    screeningQuestions: [
+      "Which HR functions have you independently managed in your latest role?",
+      "What hiring volumes and role levels have you personally handled?",
+      "Describe an employee-relations issue you resolved and the outcome.",
+      "Which HRMS, payroll or applicant-tracking systems do you use?",
+      "How have you managed performance-review and HR-compliance cycles?",
+      "Which retention or engagement initiative produced a measurable result?",
+      "What is your current and expected CTC?",
+      "What is your notice period or earliest joining date?",
+    ],
+    referenceIndustries: [
+      "Human Resources Consulting",
+      "Professional Services",
+      "B2B Companies",
+      "Events & Exhibitions",
+      "FMCG",
+      "Wellness & Lifestyle",
     ],
   },
   operations: {
@@ -319,6 +362,9 @@ function selectRoleFamily(job: IJob): RoleFamily {
   if (/marketing|public relations|\bpr\b|seo|social media|content|brand|communications/.test(haystack)) {
     return "marketing";
   }
+  if (/human resources|\bhr\b|talent acquisition|employee relations|people operations|people ops|recruitment|recruiter/.test(haystack)) {
+    return "hr";
+  }
   if (/operations|logistics|event delivery|venue|production/.test(haystack)) {
     return "operations";
   }
@@ -437,7 +483,7 @@ function infoTable(job: IJob, profile: RoleProfile): Table {
             infoLine("Location", job.location),
           ]),
           infoCell([
-            infoLine("Reporting To", profile.reportingTo),
+            infoLine("Reporting To", job.reportingTo || profile.reportingTo),
             infoLine("Experience", formatExperience(job)),
             infoLine("Education", job.educationRequirements),
             infoLine("CTC", formatCtc(job)),
@@ -580,7 +626,16 @@ export async function generateJobDescriptionDocx(job: IJob): Promise<Buffer> {
   const objective = suppliedObjective || profile.roleObjective(designation, project);
   const skills = unique([...(job.skills || []), ...(job.preferredSkills || [])]);
   const industries = unique(job.targetIndustrySegments || []);
-  const referenceIndustries = unique([...profile.referenceIndustries, ...industries]);
+  const referenceIndustries =
+    job.referenceIndustries && job.referenceIndustries.length > 0
+      ? unique([...job.referenceIndustries, ...industries])
+      : unique([...profile.referenceIndustries, ...industries]);
+  const kras: MetricRow[] =
+    job.kras && job.kras.length > 0 ? job.kras.map((k) => [k.label, k.result] as MetricRow) : profile.kras;
+  const kpis: MetricRow[] =
+    job.kpis && job.kpis.length > 0 ? job.kpis.map((k) => [k.label, k.measurement] as MetricRow) : profile.kpis;
+  const screeningQuestions =
+    job.screeningQuestions && job.screeningQuestions.length > 0 ? job.screeningQuestions : profile.screeningQuestions;
   const compensation = formatCtc(job);
   const children: Array<Paragraph | Table> = [];
 
@@ -609,9 +664,9 @@ export async function generateJobDescriptionDocx(job: IJob): Promise<Buffer> {
     sectionHeading("Key Responsibilities"),
     ...bulletList(job.responsibilities || []),
     sectionHeading("Key Result Areas (KRA)"),
-    metricTable("KRA", "Expected Result", profile.kras),
+    metricTable("KRA", "Expected Result", kras),
     sectionHeading("Key Performance Indicators (KPI)"),
-    metricTable("KPI", "Measurement", profile.kpis)
+    metricTable("KPI", "Measurement", kpis)
   );
 
   if (industries.length > 0) {
@@ -651,7 +706,7 @@ export async function generateJobDescriptionDocx(job: IJob): Promise<Buffer> {
 
   children.push(
     sectionHeading("Mandatory Candidate Screening Questions"),
-    ...numberedQuestions(profile.screeningQuestions),
+    ...numberedQuestions(screeningQuestions),
     new Paragraph({
       spacing: { before: 150, after: 0 },
       shading: { type: ShadingType.CLEAR, color: "auto", fill: COLORS.soft },
