@@ -5,6 +5,8 @@ const cardSchema = new Schema({
   iconAlt: { type: String, default: "" },
   iconWidth: { type: Number, default: 90 },
   iconHeight: { type: Number, default: 90 },
+  image: { type: String, default: "" },
+  imageAlt: { type: String, default: "" },
   title: { type: String, default: "" },
   description: { type: String, default: "" },
   desc: { type: String, default: "" },
