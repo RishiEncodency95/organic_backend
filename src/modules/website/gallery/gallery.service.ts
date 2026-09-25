@@ -151,7 +151,14 @@ export const getGalleryItems = async () => {
 };
 
 export const createGalleryItem = async (data: any) => {
-  if (!data.order) {
+  // Respect an explicit, valid order from the admin (manual reordering); otherwise assign
+  // the next one automatically. A previous bug had the client always send a stale count,
+  // so every item in a batch ended up with the same order — guard against that here too by
+  // only trusting a positive finite number.
+  const requestedOrder = Number(data.order);
+  if (Number.isFinite(requestedOrder) && requestedOrder > 0) {
+    data.order = requestedOrder;
+  } else {
     const highest = await GalleryItem.findOne().sort({ order: -1 });
     data.order = highest && highest.order ? highest.order + 1 : 1;
   }
