@@ -11,7 +11,7 @@ export const getBlogSlugArticleService = async () => {
 export const updateBlogSlugArticleService = async (payload: any, file?: Express.Multer.File) => {
   const updateData = { ...payload };
   if (file) {
-    updateData.image = `/uploads/organic_expo/${file.filename}`;
+    updateData.image = `${file.filename}`;
   }
   let data = await BlogSlugArticle.findOne();
   if (!data) {

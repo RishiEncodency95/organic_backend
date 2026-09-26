@@ -35,15 +35,15 @@ export const updateAboutOrganizerService = async (payload: any, files?: any) => 
 
   if (files && files.image && files.image[0]) {
     if (!updateData.about) updateData.about = {};
-    updateData.about.image = `/uploads/organic_expo/${files.image[0].filename}`;
+    updateData.about.image = `${files.image[0].filename}`;
   }
   if (files && files.logoImage && files.logoImage[0]) {
     if (!updateData.about) updateData.about = {};
-    updateData.about.logoImage = `/uploads/organic_expo/${files.logoImage[0].filename}`;
+    updateData.about.logoImage = `${files.logoImage[0].filename}`;
   }
   if (files && files.secondaryImage && files.secondaryImage[0]) {
     if (!updateData.about) updateData.about = {};
-    updateData.about.secondaryImage = `/uploads/organic_expo/${files.secondaryImage[0].filename}`;
+    updateData.about.secondaryImage = `${files.secondaryImage[0].filename}`;
   }
 
   const data = await AboutOrganizer.findOneAndUpdate({}, updateData, {

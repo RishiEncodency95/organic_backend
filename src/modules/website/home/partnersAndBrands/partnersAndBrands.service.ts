@@ -78,7 +78,7 @@ const parsePayload = (payload: any, files?: any) => {
         const arrName = match[1];
         const index = parseInt(match[2], 10);
         if (updateData[arrName] && updateData[arrName][index]) {
-          updateData[arrName][index].image = `/uploads/partners/${file.filename}`;
+          updateData[arrName][index].image = `${file.filename}`;
         }
       }
     });

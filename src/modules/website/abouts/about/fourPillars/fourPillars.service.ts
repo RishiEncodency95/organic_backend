@@ -25,7 +25,7 @@ export const updateFourPillarsService = async (payload: any, files?: any) => {
       if (match) {
         const index = parseInt(match[1], 10);
         if (updateData.pillars && updateData.pillars[index]) {
-          updateData.pillars[index].img = `/uploads/organic_expo/${file.filename}`;
+          updateData.pillars[index].img = `${file.filename}`;
         }
       }
     });

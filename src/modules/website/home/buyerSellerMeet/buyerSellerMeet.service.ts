@@ -42,7 +42,7 @@ export const updateBuyerSellerMeetService = async (payload: any, files?: any) =>
 
   if (files && files.image && files.image[0]) {
     if (!updateData.rightSection) updateData.rightSection = {};
-    updateData.rightSection.image = `/uploads/organic_expo/${files.image[0].filename}`;
+    updateData.rightSection.image = `${files.image[0].filename}`;
   }
 
   const data = await BuyerSellerMeet.findOneAndUpdate({}, updateData, {

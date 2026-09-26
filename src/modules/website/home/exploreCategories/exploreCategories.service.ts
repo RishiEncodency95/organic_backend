@@ -4,7 +4,7 @@ import { ApiError } from "../../../../utils/ApiError";
 export const createExploreCategoryService = async (payload: any, file?: Express.Multer.File) => {
   const updateData = { ...payload };
   if (file) {
-    updateData.logo = `/uploads/organic_expo/${file.filename}`;
+    updateData.logo = `${file.filename}`;
   }
   return await ExploreCategories.create(updateData);
 };
@@ -22,7 +22,7 @@ export const getExploreCategoryByIdService = async (id: string) => {
 export const updateExploreCategoryByIdService = async (id: string, payload: any, file?: Express.Multer.File) => {
   const updateData = { ...payload };
   if (file) {
-    updateData.logo = `/uploads/organic_expo/${file.filename}`;
+    updateData.logo = `${file.filename}`;
   }
   const data = await ExploreCategories.findByIdAndUpdate(id, updateData, { new: true });
   if (!data) throw ApiError.notFound("Category not found");

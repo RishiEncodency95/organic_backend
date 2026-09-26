@@ -110,13 +110,13 @@ const parseJsonFields = (payload: any, files?: any) => {
   }
 
   if (files && files.image && files.image[0]) {
-    updateData.image = `/uploads/organic_expo/${files.image[0].filename}`;
+    updateData.image = `${files.image[0].filename}`;
   }
 
   if (files && files.brochure && files.brochure[0]) {
     if (!updateData.buttons) updateData.buttons = {};
     if (!updateData.buttons.brochure) updateData.buttons.brochure = {};
-    updateData.buttons.brochure.link = `/uploads/organic_expo/${files.brochure[0].filename}`;
+    updateData.buttons.brochure.link = `${files.brochure[0].filename}`;
   }
 
   return updateData;

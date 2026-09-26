@@ -5,15 +5,15 @@ export const createNominationService = async (payload: any, files?: any) => {
 
   if (files) {
     if (files.deckFile && files.deckFile[0]) {
-      nominationData.deckFile = `/uploads/organic_expo/${files.deckFile[0].filename}`;
+      nominationData.deckFile = `${files.deckFile[0].filename}`;
       nominationData.deckFileName = nominationData.deckFileName || files.deckFile[0].originalname;
     }
     if (files.certFile && files.certFile[0]) {
-      nominationData.certFile = `/uploads/organic_expo/${files.certFile[0].filename}`;
+      nominationData.certFile = `${files.certFile[0].filename}`;
       nominationData.certFileName = nominationData.certFileName || files.certFile[0].originalname;
     }
     if (files.mediaFile && files.mediaFile[0]) {
-      nominationData.mediaFile = `/uploads/organic_expo/${files.mediaFile[0].filename}`;
+      nominationData.mediaFile = `${files.mediaFile[0].filename}`;
       nominationData.mediaFileName = nominationData.mediaFileName || files.mediaFile[0].originalname;
     }
   }

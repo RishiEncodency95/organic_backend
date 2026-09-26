@@ -20,7 +20,7 @@ const parseJsonFields = (payload: any, files?: any) => {
       if (key.startsWith("visual_")) {
         const index = parseInt(key.replace("visual_", ""), 10);
         if (!isNaN(index) && updateData.visuals[index]) {
-          updateData.visuals[index].img = `/uploads/organic_expo/${files[key][0].filename}`;
+          updateData.visuals[index].img = `${files[key][0].filename}`;
         }
       }
     });

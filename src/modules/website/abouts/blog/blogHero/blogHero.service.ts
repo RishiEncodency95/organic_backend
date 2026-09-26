@@ -13,10 +13,10 @@ export const updateBlogHeroService = async (payload: any, files?: any) => {
 
   if (files) {
     if (files.image && files.image[0]) {
-      updateData.image = `/uploads/organic_expo/${files.image[0].filename}`;
+      updateData.image = `${files.image[0].filename}`;
     }
     if (files.secondaryImage && files.secondaryImage[0]) {
-      updateData.secondaryImage = `/uploads/organic_expo/${files.secondaryImage[0].filename}`;
+      updateData.secondaryImage = `${files.secondaryImage[0].filename}`;
     }
   }
 

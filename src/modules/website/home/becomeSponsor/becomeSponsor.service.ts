@@ -36,7 +36,7 @@ export const updateBecomeSponsorService = async (payload: any, files?: any) => {
   // Handle uploaded centerSection image if provided
   if (files && files.image && files.image[0]) {
     if (!updateData.centerSection) updateData.centerSection = {};
-    updateData.centerSection.image = `/uploads/organic_expo/${files.image[0].filename}`;
+    updateData.centerSection.image = `${files.image[0].filename}`;
   }
 
   const data = await BecomeSponsor.findOneAndUpdate({}, updateData, {
