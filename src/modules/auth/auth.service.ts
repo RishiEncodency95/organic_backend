@@ -332,3 +332,25 @@ export const resetPasswordService = async (token: string, newPass: string) => {
   logger.info(`Password reset successfully for ${admin.email}`);
   return { success: true, message: "Password reset successfully" };
 };
+
+export const changePasswordService = async (
+  adminId: string,
+  currentPassword: string,
+  newPassword: string
+) => {
+  const admin = await Admin.findById(adminId).select("+password");
+  if (!admin) {
+    throw ApiError.notFound("Admin not found");
+  }
+
+  const isCurrentPasswordValid = await admin.comparePassword(currentPassword);
+  if (!isCurrentPasswordValid) {
+    throw ApiError.unauthorized("Current password is incorrect");
+  }
+
+  admin.password = newPassword;
+  await admin.save();
+
+  logger.info(`Password changed successfully for ${admin.email}`);
+  return { success: true, message: "Password changed successfully" };
+};

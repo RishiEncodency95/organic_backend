@@ -7,6 +7,7 @@ import {
   refreshToken,
   forgotPassword,
   resetPassword,
+  changePassword,
   logout,
   getMe,
 } from "./auth.controller";
@@ -18,6 +19,7 @@ import {
   verify2FASchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  changePasswordSchema,
 } from "./auth.schema";
 
 import { Admin } from "../../models/Admin.model";
@@ -82,6 +84,7 @@ router.use(protect);
 router.get("/me", getMe);
 router.get("/setup-2fa", setup2FA);
 router.post("/confirm-2fa", confirm2FA);
+router.post("/change-password", validateRequest(changePasswordSchema), changePassword);
 router.post("/logout", logout);
 
 export default router;
