@@ -18,6 +18,12 @@ export interface UdyamExtractedData {
   mobile: string | null;
   email: string | null;
   nicCode: string | null;
+  gstin: string | null;
+  pan: string | null;
+  constitution: string | null;
+  bankName: string | null;
+  bankIfsc: string | null;
+  bankAccountNumber: string | null;
 }
 
 const RESPONSE_SCHEMA_TEXT = `{
@@ -36,7 +42,13 @@ const RESPONSE_SCHEMA_TEXT = `{
   "pincode": "6-digit PIN code, or null",
   "mobile": "Registered mobile number exactly as printed, or null",
   "email": "Registered email address exactly as printed, or null",
-  "nicCode": "Primary NIC code exactly as printed, or null"
+  "nicCode": "Primary NIC code exactly as printed, or null",
+  "gstin": "The full 15-character GSTIN exactly as printed (format 22AAAAA0000A1Z5), or null. A 'GSTIN registered: Yes/No' flag is NOT a GSTIN — return null for that",
+  "pan": "The full 10-character PAN exactly as printed (format AAAAA0000A), or null. Udyam certificates often mask it (e.g. 'AAXXX1234X' or 'XXXXX1234X') — return null for anything masked or partially hidden, never reconstruct it",
+  "constitution": "The 'Type of Organisation' / constitution exactly as one of: 'Proprietorship', 'Partnership', 'LLP', 'Private Limited Company', 'Public Limited Company'. Map the certificate's wording onto the closest of those five (e.g. 'Private Limited Company' for 'PRIVATE LIMITED COMPANY'), or null if it is not printed. Never infer it from the enterprise's name",
+  "bankName": "Bank name from the 'Bank Details' section exactly as printed, or null",
+  "bankIfsc": "The 11-character IFS code from the 'Bank Details' section (format SBIN0000642), or null. These fields are printed run together in the extracted text (e.g. 'STATE BANK OF INDIASBIN000064255145993685') — split them on the IFSC's fixed shape of 4 letters, then '0', then 6 more characters",
+  "bankAccountNumber": "The bank account number from the 'Bank Details' section, digits only, or null. It is whatever follows the IFS code in that run-together text"
 }`;
 
 const SYSTEM_PROMPT =
@@ -50,6 +62,12 @@ DOCUMENT TEXT:
 """
 ${docText}
 """
+
+NOTE ON FORMATTING: this text comes from a PDF table, so labels and values are run
+together with no separator and a value is often immediately followed by the next label
+(e.g. "GenderMaleSpecially Abled(DIVYANG)No" means Gender = Male, and
+"Social CategorySC" means Social Category = SC). Read values by their label, not by
+whitespace, and do not let a trailing label bleed into the value you return.
 
 Return ONLY a strictly valid JSON object with EXACTLY this structure:
 ${RESPONSE_SCHEMA_TEXT}`;
@@ -73,6 +91,10 @@ export const extractUdyamWithOpenAI = async (input: UdyamDocumentInput): Promise
 
   const openai = new OpenAI({ apiKey, timeout: 20_000, maxRetries: 1 });
 
+  // Cheap model first; the stronger one is only paid for when that actually fails, which
+  // keeps a bad day on one model from dropping the whole read to the heuristic fallback.
+  const models = ["gpt-4o-mini", "gpt-4o"];
+
   const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = input.imageBase64
     ? [
         { type: "text", text: buildImagePrompt() },
@@ -83,20 +105,36 @@ export const extractUdyamWithOpenAI = async (input: UdyamDocumentInput): Promise
       ]
     : [{ type: "text", text: buildTextPrompt(input.text || "") }];
 
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: userContent },
-    ],
-    response_format: { type: "json_object" },
-    temperature: 0.1,
-  });
+  let lastError = "no model attempted";
 
-  const content = completion.choices[0]?.message?.content;
-  if (!content) throw new Error("Empty response from OpenAI");
+  for (const model of models) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userContent },
+        ],
+        response_format: { type: "json_object" },
+        // Transcription, not generation: any randomness here means the same certificate
+        // reads differently on two runs, which is exactly how a printed field ends up
+        // filled on one upload and blank on the next.
+        temperature: 0,
+      });
 
-  return JSON.parse(content) as UdyamExtractedData;
+      const content = completion.choices[0]?.message?.content;
+      if (!content) {
+        lastError = `${model}: empty response`;
+        continue;
+      }
+      return JSON.parse(content) as UdyamExtractedData;
+    } catch (err) {
+      lastError = `${model}: ${(err as Error).message}`;
+      console.warn(`Udyam OpenAI extraction failed on ${lastError}`);
+    }
+  }
+
+  throw new Error(`OpenAI extraction failed — ${lastError}`);
 };
 
 export const extractUdyamWithGemini = async (input: UdyamDocumentInput): Promise<UdyamExtractedData> => {
@@ -110,29 +148,86 @@ export const extractUdyamWithGemini = async (input: UdyamDocumentInput): Promise
       ]
     : [{ text: buildTextPrompt(input.text || "") }];
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  // gemini-1.5-flash was retired on the Gemini API and now 404s, which silently turned
+  // this whole fallback into dead weight. Newest first, so a model being retired again
+  // costs one wasted request rather than the entire fallback.
+  const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+  let lastError = "no model attempted";
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts }],
-      generationConfig: { responseMimeType: "application/json", temperature: 0.1 },
-    }),
-    signal: AbortSignal.timeout(20_000),
-  });
+  for (const model of models) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} ${errText}`);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: { responseMimeType: "application/json", temperature: 0 },
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+
+    if (!response.ok) {
+      lastError = `${model}: ${response.status} ${(await response.text()).slice(0, 200)}`;
+      console.warn(`Udyam Gemini extraction failed on ${lastError}`);
+      continue;
+    }
+
+    const resData = (await response.json()) as any;
+    const textOutput = resData.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!textOutput) {
+      lastError = `${model}: empty response`;
+      continue;
+    }
+
+    const cleanedJson = textOutput.replace(/```json/g, "").replace(/```/g, "").trim();
+    return JSON.parse(cleanedJson) as UdyamExtractedData;
   }
 
-  const resData = (await response.json()) as any;
-  const textOutput = resData.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!textOutput) throw new Error("Empty response from Gemini API");
+  throw new Error(`Gemini API error: ${lastError}`);
+};
 
-  const cleanedJson = textOutput.replace(/```json/g, "").replace(/```/g, "").trim();
-  return JSON.parse(cleanedJson) as UdyamExtractedData;
+const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+
+/**
+ * The certificate prints bank name, IFSC and account number run together
+ * ("STATE BANK OF INDIASBIN000064255145993685"), and the model splits that boundary a
+ * character off — returning a correct IFSC but an account number carrying the IFSC's
+ * last digit. An IFSC has a fixed shape, so once it is located in the source text the
+ * account number is simply the digits that follow it. Deterministic beats re-prompting:
+ * a payout account that is silently one digit wrong is worse than none at all.
+ */
+const repairBankAccountNumber = (data: UdyamExtractedData, sourceText: string): UdyamExtractedData => {
+  const ifsc = data.bankIfsc?.trim().toUpperCase() || "";
+  if (!sourceText || !IFSC_RE.test(ifsc)) return data;
+
+  const index = sourceText.toUpperCase().indexOf(ifsc);
+  if (index === -1) return data;
+
+  const digits = sourceText.slice(index + ifsc.length).match(/^\d+/)?.[0];
+  if (!digits) return data;
+
+  if (digits !== data.bankAccountNumber) {
+    console.log(`🏦 [Udyam] Bank account corrected from model split: ${data.bankAccountNumber} -> ${digits}`);
+  }
+  return { ...data, bankIfsc: ifsc, bankAccountNumber: digits };
+};
+
+/**
+ * Gender is printed run together with the next label ("GenderMaleSpecially Abled"), and
+ * the model reads that inconsistently — the same certificate yields "Male" on one run and
+ * null on another. It has only a few possible values, so where the model came back empty
+ * the text itself settles it. Only ever fills a gap; a value the model did return stands.
+ */
+const repairGender = (data: UdyamExtractedData, sourceText: string): UdyamExtractedData => {
+  if (data.gender || !sourceText) return data;
+
+  const match = sourceText.match(/Gender(?:\s+of\s+Entrepreneur)?\s*:?\s*(Male|Female)/i);
+  if (!match) return data;
+
+  const gender = match[1].toLowerCase() === "male" ? "Male" : "Female";
+  console.log(`👤 [Udyam] Gender recovered from certificate text: ${gender}`);
+  return { ...data, gender };
 };
 
 const UDYAM_NUMBER_RE = /UDYAM-[A-Z]{2}-\d{2}-\d{7}/i;
@@ -157,6 +252,12 @@ const extractUdyamHeuristic = (text: string): UdyamExtractedData => {
     mobile: null,
     email: null,
     nicCode: null,
+    gstin: null,
+    pan: null,
+    constitution: null,
+    bankName: null,
+    bankIfsc: null,
+    bankAccountNumber: null,
   };
 };
 
@@ -207,6 +308,12 @@ export const runUdyamExtractionPipeline = async (
           mobile: null,
           email: null,
           nicCode: null,
+          gstin: null,
+          pan: null,
+          constitution: null,
+          bankName: null,
+          bankIfsc: null,
+          bankAccountNumber: null,
         },
         provider: "Heuristic",
       };
@@ -218,14 +325,14 @@ export const runUdyamExtractionPipeline = async (
 
   try {
     const data = await extractUdyamWithOpenAI(input);
-    return { data, provider: "OpenAI" };
+    return { data: repairGender(repairBankAccountNumber(data, extractedText), extractedText), provider: "OpenAI" };
   } catch (openaiErr) {
     console.warn("Udyam OpenAI extraction failed, trying Gemini:", (openaiErr as Error).message);
   }
 
   try {
     const data = await extractUdyamWithGemini(input);
-    return { data, provider: "Gemini" };
+    return { data: repairGender(repairBankAccountNumber(data, extractedText), extractedText), provider: "Gemini" };
   } catch (geminiErr) {
     console.warn("Udyam Gemini extraction failed, falling back to heuristic:", (geminiErr as Error).message);
   }

@@ -69,6 +69,8 @@ interface IPaymentDetails {
   razorpayPaymentId?: string;
   razorpaySignature?: string;
   status?: "PENDING" | "PAID" | "FAILED";
+  failureReason?: string;
+  failedAt?: Date;
   paidAt?: Date;
 }
 
@@ -169,6 +171,8 @@ const PaymentDetailsSchema = new Schema<IPaymentDetails>(
     razorpaySignature: { type: String, trim: true },
     status: { type: String, enum: ["PENDING", "PAID", "FAILED"] },
     paidAt: { type: Date },
+    failureReason: { type: String, trim: true },
+    failedAt: { type: Date },
   },
   { _id: false }
 );
