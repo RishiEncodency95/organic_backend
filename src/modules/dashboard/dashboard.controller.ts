@@ -3,8 +3,22 @@ import mongoose from "mongoose";
 import Seo from "../../models/seo.model";
 import BlogPost from "../../models/blog/blogPost.model";
 import ContactEnquiry from "../../models/contact/contactEnquiry.model";
+import { logger } from "../../utils/logger";
 
-const ihweDb = mongoose.createConnection("mongodb://localhost:27017/namogange");
+// Visitor/buyer registrations live in a separate database. It is optional: when it is not
+// reachable the dashboard shows 0 for those counts instead of crashing the whole server.
+const ihweDb = mongoose.createConnection(
+  process.env.IHWE_MONGODB_URI || "mongodb://localhost:27017/namogange",
+  { bufferCommands: false, serverSelectionTimeoutMS: 5000 }
+);
+ihweDb.on("error", (err) => logger.warn(`IHWE database unavailable: ${err.message}`));
+ihweDb.asPromise().catch(() => {
+  // Already logged by the "error" listener above.
+});
+
+/** Runs a query on the IHWE database, or returns the fallback when it is not connected. */
+const fromIhwe = <T>(query: () => Promise<T>, fallback: T): Promise<T> =>
+  ihweDb.readyState === 1 ? query().catch(() => fallback) : Promise.resolve(fallback);
 
 export const dashboardController = {
   async getOverview(_req: Request, res: Response) {
@@ -19,12 +33,12 @@ export const dashboardController = {
         BlogPost.countDocuments().catch(() => 0),
         ContactEnquiry.countDocuments().catch(() => 0),
         ContactEnquiry.find().sort({ createdAt: -1 }).limit(20).lean().catch(() => []),
-        ihweDb.collection("visitors").countDocuments().catch(() => 0),
-        ihweDb.collection("buyers").countDocuments().catch(() => 0),
+        fromIhwe(() => ihweDb.collection("visitors").countDocuments(), 0),
+        fromIhwe(() => ihweDb.collection("buyers").countDocuments(), 0),
         ContactEnquiry.countDocuments({ $or: [{ service: /sponsor|pavilion/i }, { subject: /sponsor|pavilion/i }, { message: /sponsor|pavilion/i }] }).catch(() => 0),
         ContactEnquiry.countDocuments({ $or: [{ service: /exhibitor|stall|stand|book/i }, { subject: /exhibitor|stall|stand|book/i }, { message: /exhibitor|stall|stand|book/i }] }).catch(() => 0),
-        ihweDb.collection("visitors").find().sort({ createdAt: -1 }).limit(20).toArray().catch(() => []),
-        ihweDb.collection("buyers").find().sort({ createdAt: -1 }).limit(20).toArray().catch(() => []),
+        fromIhwe(() => ihweDb.collection("visitors").find().sort({ createdAt: -1 }).limit(20).toArray(), [] as any[]),
+        fromIhwe(() => ihweDb.collection("buyers").find().sort({ createdAt: -1 }).limit(20).toArray(), [] as any[]),
       ]);
 
       const totalPagesCount = totalSeoPages > 0 ? totalSeoPages : 14;
