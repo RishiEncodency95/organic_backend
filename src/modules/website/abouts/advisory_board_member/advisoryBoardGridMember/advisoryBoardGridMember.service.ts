@@ -4,7 +4,7 @@ import { ApiError } from "../../../../../utils/ApiError";
 export const createAdvisoryBoardGridMemberService = async (payload: any, file?: Express.Multer.File) => {
   const updateData = { ...payload };
   if (file) {
-    updateData.image = `/uploads/organic_expo/${file.filename}`;
+    updateData.image = `${file.filename}`;
   }
   return await AdvisoryBoardGridMember.create(updateData);
 };
@@ -22,7 +22,7 @@ export const getAdvisoryBoardGridMemberByIdService = async (id: string) => {
 export const updateAdvisoryBoardGridMemberByIdService = async (id: string, payload: any, file?: Express.Multer.File) => {
   const updateData = { ...payload };
   if (file) {
-    updateData.image = `/uploads/organic_expo/${file.filename}`;
+    updateData.image = `${file.filename}`;
   }
   const data = await AdvisoryBoardGridMember.findByIdAndUpdate(id, updateData, { new: true });
   if (!data) throw ApiError.notFound("Advisory Board Member not found");

@@ -25,7 +25,7 @@ export const updateHomeVideosService = async (payload: any, files?: any) => {
       if (match) {
         const index = parseInt(match[1], 10);
         if (updateData.videos && updateData.videos[index]) {
-          updateData.videos[index].thumbnail = `/uploads/organic_expo/${file.filename}`;
+          updateData.videos[index].thumbnail = `${file.filename}`;
         }
       }
     });

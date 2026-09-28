@@ -36,6 +36,15 @@ export interface IJob extends Document {
   requirements: string[];
   preferredQualifications?: string[];
 
+  // AI-generated (or manually set) role context, used by the exported job description
+  // .docx — falls back to a generic role-family template when not present.
+  reportingTo?: string;
+  kras?: { label: string; result: string }[];
+  kpis?: { label: string; measurement: string }[];
+  referenceIndustries?: string[];
+  screeningQuestions?: string[];
+  aiContextFingerprint?: string;
+
   // Application & AI screening
   acceptOnlineApplications: boolean;
   aiCvScreening: boolean;
@@ -100,6 +109,13 @@ const JobSchema: Schema = new Schema(
     responsibilities: [{ type: String }],
     requirements: [{ type: String }],
     preferredQualifications: [{ type: String }],
+
+    reportingTo: { type: String, trim: true },
+    kras: [{ label: { type: String, trim: true }, result: { type: String, trim: true }, _id: false }],
+    kpis: [{ label: { type: String, trim: true }, measurement: { type: String, trim: true }, _id: false }],
+    referenceIndustries: [{ type: String, trim: true }],
+    screeningQuestions: [{ type: String, trim: true }],
+    aiContextFingerprint: { type: String, select: true },
 
     acceptOnlineApplications: { type: Boolean, default: true },
     aiCvScreening: { type: Boolean, default: true },

@@ -4,7 +4,7 @@ import { ApiError } from "../../../../utils/ApiError";
 export const createHomeHeroService = async (payload: any, file?: Express.Multer.File) => {
   const updateData = { ...payload };
   if (file) {
-    updateData.img = `/uploads/organic_expo/${file.filename}`;
+    updateData.img = `${file.filename}`;
   }
   return await HomeHero.create(updateData);
 };
@@ -22,7 +22,7 @@ export const getHomeHeroByIdService = async (id: string) => {
 export const updateHomeHeroByIdService = async (id: string, payload: any, file?: Express.Multer.File) => {
   const updateData = { ...payload };
   if (file) {
-    updateData.img = `/uploads/organic_expo/${file.filename}`;
+    updateData.img = `${file.filename}`;
   }
   const data = await HomeHero.findByIdAndUpdate(id, updateData, { new: true });
   if (!data) throw ApiError.notFound("Home Hero banner not found");

@@ -35,7 +35,7 @@ export const updateSponsorshipCategoriesService = async (payload: any, files?: a
 
   if (files && files.image && files.image[0]) {
     if (!updateData.promoBox) updateData.promoBox = {};
-    updateData.promoBox.image = `/uploads/organic_expo/${files.image[0].filename}`;
+    updateData.promoBox.image = `${files.image[0].filename}`;
   }
 
   const data = await SponsorshipCategories.findOneAndUpdate({}, updateData, {

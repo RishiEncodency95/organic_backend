@@ -2,6 +2,7 @@ import { Router } from "express";
 import * as galleryController from "./gallery.controller";
 import galleryHeroRouter from "./galleryHero/galleryHero.routes";
 import galleryCountersRouter from "./galleryCounters/galleryCounters.routes";
+import videoHighlightRouter from "./videoHighlight.routes";
 
 const router = Router();
 
@@ -10,6 +11,9 @@ router.use("/hero", galleryHeroRouter);
 
 // Gallery Counters Section
 router.use("/counters", galleryCountersRouter);
+
+// Video Highlights (YouTube / Instagram / Upload reels shown on the gallery page)
+router.use("/video-highlights", videoHighlightRouter);
 
 // Metadata: Categories and Years
 router.get("/meta", galleryController.getMeta);

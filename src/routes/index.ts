@@ -23,6 +23,7 @@ import contactEnquiryRouter from "../modules/website/contact/contactEnquiry.rout
 import verifyRouter from "../modules/website/contact/verify.routes";
 import blogPostRouter from "../modules/blogPost/blogPost.routes";
 import careersRouter from "./careers.routes";
+import msmeRouter from "./msme.routes";
 import dashboardRouter from "../modules/dashboard/dashboard.routes";
 
 const router = Router();
@@ -40,6 +41,7 @@ router.get("/health", (req, res) => {
 router.use("/dashboard", dashboardRouter);
 router.use("/careers", careersRouter);
 router.use("/admin/careers", careersRouter);
+router.use("/msme", msmeRouter);
 router.use("/uploads", uploadRouter);
 router.use("/settings", settingsRouter);
 router.use("/auth", authRouter);

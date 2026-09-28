@@ -10,6 +10,7 @@ import {
   refreshTokenService,
   forgotPasswordService,
   resetPasswordService,
+  changePasswordService,
 } from "./auth.service";
 import { env } from "../../config/env";
 import jwt from "jsonwebtoken";
@@ -144,6 +145,17 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
   );
 });
 
+// POST /api/auth/change-password (protected)
+export const changePassword = asyncHandler(async (req: Request, res: Response) => {
+  const adminId = req.user!.id;
+  const { currentPassword, newPassword } = req.body;
+
+  const result = await changePasswordService(adminId, currentPassword, newPassword);
+  res.status(200).json(
+    new ApiResponse(200, "Password changed successfully", result)
+  );
+});
+
 // POST /api/auth/logout (protected)
 export const logout = asyncHandler(async (req: Request, res: Response) => {
   const accessToken = req.headers.authorization?.split(" ")[1] || "";
@@ -171,6 +183,7 @@ export const getMe = asyncHandler(async (req: Request, res: Response) => {
         phone: admin.phone,
         avatarUrl: admin.avatarUrl,
         role: admin.role,
+        roleName: admin.roleName,
         isTwoFactorEnabled: admin.isTwoFactorEnabled,
       },
     })

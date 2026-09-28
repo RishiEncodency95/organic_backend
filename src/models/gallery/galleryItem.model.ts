@@ -5,6 +5,7 @@ export interface IGalleryItem extends Document {
   year: string;
   category: string;
   image: string;
+  imageAlt?: string;
   uploadedBy: string;
   date: string;
   time: string;
@@ -37,6 +38,11 @@ const galleryItemSchema = new Schema<IGalleryItem>(
     image: {
       type: String,
       required: true,
+      trim: true,
+    },
+    imageAlt: {
+      type: String,
+      default: "",
       trim: true,
     },
     uploadedBy: {

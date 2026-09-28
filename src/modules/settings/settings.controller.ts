@@ -9,11 +9,17 @@ const defaultFooter = {
   enabled: true,
   description:
     "A global platform uniting over 500+ exhibitors from across the organic value chain, showcasing certified products, advanced agritech, sustainable practices, and the rich heritage of traditional wellness. Discover organic living with conferences and B2B opportunities.",
-  logoImage: "http://localhost:4000/uploads/bharat-organic_footer/1789129240083-112323989.png",
-  leafImage: "http://localhost:4000/uploads/bharat-organic_footer/1789129240457-21656484.png",
-  downImage: "http://localhost:4000/uploads/bharat-organic_footer/1789129240816-597711504.png",
-  organisedByLogo: "http://localhost:4000/uploads/bharat-organic_footer/1789129241128-849314126.png",
-  bottomBannerImage: "http://localhost:4000/uploads/bharat-organic_footer/1789129242465-452827954.webp",
+  // Left empty on purpose: these used to hardcode a local `/uploads/...` URL
+  // from the server's disk, which every visitor's browser loaded directly —
+  // the frontend's Footer component already falls back to its own bundled
+  // placeholder art (no server round-trip at all) whenever these are empty.
+  // Upload real logo/decoration images via Settings → Footer in the admin
+  // panel to override these; they will be saved as Cloudinary URLs.
+  logoImage: "",
+  leafImage: "",
+  downImage: "",
+  organisedByLogo: "",
+  bottomBannerImage: "",
   websiteUrl: "www.bharatorganicexpo.com",
   contactAddress: "Hall 12, Pragati Maidan, New Delhi, India 110001",
   phoneNumber: "+91 96549 00525",

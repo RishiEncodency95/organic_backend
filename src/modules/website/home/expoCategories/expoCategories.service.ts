@@ -80,10 +80,10 @@ export const updateExpoCategoriesService = async (payload: any, files?: any) => 
       if (match) {
         const index = parseInt(match[1], 10);
         if (updateData.categories && updateData.categories[index]) {
-          updateData.categories[index].image = `/uploads/organic_expo/${file.filename}`;
+          updateData.categories[index].image = `${file.filename}`;
         }
         if (updateData.items && updateData.items[index]) {
-          updateData.items[index].image = `/uploads/organic_expo/${file.filename}`;
+          updateData.items[index].image = `${file.filename}`;
         }
       }
     });

@@ -177,3 +177,81 @@ export const uploadCandidatePhotoToCloudinary = (
     stream.pipe(uploadStream);
   });
 };
+
+/**
+ * MSME Udyam Registration certificate. Same Cloudinary-first / local-disk-fallback
+ * contract as the CV upload above — accepts PDF or a scanned/photographed image.
+ */
+export const uploadUdyamCertificateToCloudinary = (
+  fileBuffer: Buffer,
+  originalName: string,
+  mimeType: string
+): Promise<CloudinaryUploadResult> => {
+  return new Promise((resolve) => {
+    const folder = "bharat-organic-expo/msme/udyam";
+    const cleanPublicId = `udyam_${Date.now()}_${originalName.replace(/[^a-zA-Z0-9]/g, "_")}`;
+
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: "auto",
+        public_id: cleanPublicId,
+      },
+      (error, result) => {
+        if (error || !result) {
+          console.warn("⚠️ Cloudinary Udyam upload warning, falling back to local secure storage:", error?.message || error);
+
+          try {
+            const uploadDir = path.join(process.cwd(), "public", "uploads", "udyam");
+            if (!fs.existsSync(uploadDir)) {
+              fs.mkdirSync(uploadDir, { recursive: true });
+            }
+            const safeFileName = `${cleanPublicId}_${originalName.replace(/[^a-zA-Z0-9.]/g, "_")}`;
+            const filePath = path.join(uploadDir, safeFileName);
+            fs.writeFileSync(filePath, fileBuffer);
+
+            try {
+              const frontendUploadDir = path.join(process.cwd(), "..", "organic_frontend", "public", "uploads", "udyam");
+              if (!fs.existsSync(frontendUploadDir)) {
+                fs.mkdirSync(frontendUploadDir, { recursive: true });
+              }
+              fs.writeFileSync(path.join(frontendUploadDir, safeFileName), fileBuffer);
+            } catch (feErr) {
+              // Ignore if running standalone
+            }
+
+            return resolve({
+              url: `/uploads/udyam/${safeFileName}`,
+              publicId: cleanPublicId,
+              originalFileName: originalName,
+              format: mimeType.split("/")[1] || "pdf",
+              bytes: fileBuffer.length,
+            });
+          } catch (localErr) {
+            console.error("Local Udyam save error:", localErr);
+            return resolve({
+              url: "",
+              publicId: cleanPublicId,
+              originalFileName: originalName,
+              format: mimeType.split("/")[1] || "pdf",
+              bytes: fileBuffer.length,
+            });
+          }
+        }
+
+        resolve({
+          url: result.secure_url || result.url,
+          publicId: result.public_id,
+          originalFileName: originalName,
+          format: result.format || mimeType.split("/")[1] || "pdf",
+          bytes: result.bytes || fileBuffer.length,
+        });
+      }
+    );
+
+    const stream = new Readable();
+    stream.push(fileBuffer);
+    stream.push(null);
+    stream.pipe(uploadStream);
+  });
+};

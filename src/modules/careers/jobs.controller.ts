@@ -1,7 +1,140 @@
 import { Request, Response } from "express";
+import { createHash } from "crypto";
 import Job from "../../models/careers/Job.model";
 import Application from "../../models/careers/Application.model";
 import { generateJobDescriptionDocx } from "./jobDoc.service";
+import { generateJobDescriptionWithAI } from "../../services/ai/jobDescription.service";
+
+const jobContextFingerprint = (job: any): string => {
+  const context = {
+    title: job.title || "",
+    designation: job.designation || "",
+    company: job.company || "",
+    projectEvent: job.projectEvent || "",
+    department: job.department || "",
+    jobCode: job.jobCode || "",
+    employmentType: job.employmentType || "",
+    workplaceType: job.workplaceType || "",
+    totalOpenings: job.totalOpenings ?? 1,
+    location: job.location || "",
+    experienceMin: job.experienceMin ?? 0,
+    experienceMax: job.experienceMax ?? 0,
+    educationRequirements: job.educationRequirements || "",
+    ctcMin: job.ctcMin ?? null,
+    ctcMax: job.ctcMax ?? null,
+    salaryType: job.salaryType || "",
+    performanceIncentiveApplicable: Boolean(job.performanceIncentiveApplicable),
+    incentiveType: job.incentiveType || "",
+    responsibilities: Array.isArray(job.responsibilities) ? job.responsibilities : [],
+    requirements: Array.isArray(job.requirements) ? job.requirements : [],
+    skills: Array.isArray(job.skills) ? job.skills : [],
+    preferredSkills: Array.isArray(job.preferredSkills) ? job.preferredSkills : [],
+    targetIndustrySegments: Array.isArray(job.targetIndustrySegments) ? job.targetIndustrySegments : [],
+    specificExperience: job.specificExperience || "",
+  };
+
+  return createHash("sha256").update(JSON.stringify(context)).digest("hex");
+};
+
+const hasCompleteAiDocumentContext = (job: any): boolean =>
+  typeof job.reportingTo === "string" &&
+  job.reportingTo.trim().length > 0 &&
+  Array.isArray(job.kras) &&
+  job.kras.length >= 5 &&
+  Array.isArray(job.kpis) &&
+  job.kpis.length >= 5 &&
+  Array.isArray(job.referenceIndustries) &&
+  job.referenceIndustries.length > 0 &&
+  Array.isArray(job.screeningQuestions) &&
+  job.screeningQuestions.length >= 5;
+
+/**
+ * Keeps the DOCX role context tied to the actual saved form values. Existing jobs
+ * without a fingerprint are refreshed once; later downloads reuse the saved AI
+ * result until a role-defining field changes.
+ */
+const ensureAiDocumentContext = async (job: any): Promise<void> => {
+  const fingerprint = jobContextFingerprint(job);
+  if (job.aiContextFingerprint === fingerprint && hasCompleteAiDocumentContext(job)) return;
+
+  try {
+    const generated = await generateJobDescriptionWithAI({
+      title: job.title,
+      designation: job.designation,
+      company: job.company,
+      projectEvent: job.projectEvent,
+      department: job.department,
+      jobCode: job.jobCode,
+      employmentType: job.employmentType || "Full Time",
+      workplaceType: job.workplaceType || "On-site (Office)",
+      totalOpenings: job.totalOpenings,
+      location: job.location,
+      experienceMin: job.experienceMin,
+      experienceMax: job.experienceMax,
+      educationRequirements: job.educationRequirements,
+      ctcMin: job.ctcMin,
+      ctcMax: job.ctcMax,
+      salaryType: job.salaryType,
+      performanceIncentiveApplicable: job.performanceIncentiveApplicable,
+      incentiveType: job.incentiveType,
+      keyResponsibilities: job.responsibilities,
+      requiredSkills: job.skills,
+      preferredSkills: job.preferredSkills,
+      targetIndustrySegments: job.targetIndustrySegments,
+      specificExperience: job.specificExperience,
+    });
+
+    job.reportingTo = generated.reportingTo;
+    job.kras = generated.kras;
+    job.kpis = generated.kpis;
+    job.referenceIndustries = generated.referenceIndustries;
+    job.screeningQuestions = generated.screeningQuestions;
+    job.aiContextFingerprint = fingerprint;
+    await job.save();
+  } catch (error) {
+    // A document can still be produced from the deterministic fallback. Do not
+    // store the fingerprint so the next export can retry OpenAI automatically.
+    console.warn("OpenAI job-document context generation failed; using fallback:", error instanceof Error ? error.message : error);
+  }
+};
+
+export const generateJobDescription = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { title, department, location, employmentType, workplaceType } = req.body || {};
+    if (!title || !department || !location) {
+      res.status(400).json({ success: false, message: "Job title, department and location are required to generate content." });
+      return;
+    }
+
+    const generated = await generateJobDescriptionWithAI({
+      title,
+      designation: req.body.designation,
+      company: req.body.company,
+      projectEvent: req.body.projectEvent,
+      department,
+      jobCode: req.body.jobCode,
+      employmentType: employmentType || "Full Time",
+      workplaceType: workplaceType || "On-site (Office)",
+      totalOpenings: req.body.totalOpenings,
+      location,
+      experienceMin: req.body.experienceMin,
+      experienceMax: req.body.experienceMax,
+      educationRequirements: req.body.educationRequirements,
+      ctcMin: req.body.ctcMin,
+      ctcMax: req.body.ctcMax,
+      salaryType: req.body.salaryType,
+      performanceIncentiveApplicable: req.body.performanceIncentiveApplicable,
+      incentiveType: req.body.incentiveType,
+    });
+
+    res.status(200).json({ success: true, data: generated });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : "Failed to generate job description",
+    });
+  }
+};
 
 export const getJobs = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -93,6 +226,7 @@ export const exportJobDocx = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    await ensureAiDocumentContext(job);
     const buffer = await generateJobDescriptionDocx(job);
     const filename = `${job.title.replace(/[^a-zA-Z0-9]+/g, "-").replace(/(^-|-$)+/g, "")}.docx`;
 
@@ -172,6 +306,7 @@ export const exportAdminJobDocx = async (req: Request, res: Response): Promise<v
       return;
     }
 
+    await ensureAiDocumentContext(job);
     const buffer = await generateJobDescriptionDocx(job);
     const filename = `${job.title.replace(/[^a-zA-Z0-9]+/g, "-").replace(/(^-|-$)+/g, "")}.docx`;
 

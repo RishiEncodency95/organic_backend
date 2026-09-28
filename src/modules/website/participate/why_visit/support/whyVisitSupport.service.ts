@@ -17,7 +17,7 @@ const parseJsonFields = (payload: any, files?: any) => {
   if (files) {
     Object.keys(files).forEach((fieldname) => {
       if (files[fieldname] && files[fieldname][0]) {
-        updateData[fieldname] = `/uploads/organic_expo/${files[fieldname][0].filename}`;
+        updateData[fieldname] = `${files[fieldname][0].filename}`;
       }
     });
   }

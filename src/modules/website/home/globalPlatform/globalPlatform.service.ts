@@ -183,6 +183,8 @@ export const updateGlobalPlatformService = async (payload: any, files?: any) => 
         iconAlt: c.iconAlt || fallback.iconAlt,
         iconWidth: c.iconWidth || fallback.iconWidth,
         iconHeight: c.iconHeight || fallback.iconHeight,
+        image: c.image || "",
+        imageAlt: c.imageAlt || "",
         bgClass: c.bgClass || fallback.bgClass,
         borderClass: c.borderClass || fallback.borderClass,
       };

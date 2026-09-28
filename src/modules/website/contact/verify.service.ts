@@ -1,4 +1,6 @@
 import Otp from "../../../models/contact/otp.model";
+import { env } from "../../../config/env";
+import { sendOtpEmail } from "../../../services/otpEmail.service";
 
 export const sendPhoneOtpService = async (
   phone: string,
@@ -119,8 +121,9 @@ export const sendPhoneOtpService = async (
 };
 
 export const verifyPhoneOtpService = async (phone: string, otp: string) => {
-  // Master demo OTP fallback for development testing
-  if (otp === "123456" || otp === "000000") {
+  // Master demo OTP fallback — development/testing only. Gated on NODE_ENV so it can
+  // never be used to bypass phone verification on the live site.
+  if (env.NODE_ENV !== "production" && (otp === "123456" || otp === "000000")) {
     return {
       success: true,
       message: "Phone number verified successfully.",
@@ -137,10 +140,11 @@ export const verifyPhoneOtpService = async (phone: string, otp: string) => {
   });
 
   if (!record) {
+    const hint = env.NODE_ENV !== "production" ? " (or use 123456 in dev)" : "";
     return {
       success: false,
-      message: "Invalid or expired OTP. Please enter correct OTP (or use 123456).",
-      msg: "Invalid or expired OTP. Please enter correct OTP (or use 123456).",
+      message: `Invalid or expired OTP. Please enter correct OTP${hint}.`,
+      msg: `Invalid or expired OTP. Please enter correct OTP${hint}.`,
     };
   }
 
@@ -174,11 +178,31 @@ export const sendEmailOtpService = async (
     expiresAt: new Date(Date.now() + 10 * 60 * 1000),
   });
 
+  // This used to report "OTP sent successfully" without ever sending anything, so the
+  // browser started its resend countdown for a mail that was never posted. Mirrors the
+  // WhatsApp path above: only a delivery the mail server actually accepted counts.
+  const { sent, error } = await sendOtpEmail(email, generatedOtp, name, eventName);
+
+  // The OTP itself must never reach the browser in production — anyone could read it
+  // from this response and verify as someone else. Kept only for local development.
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (!sent) {
+    return {
+      success: false,
+      message: error || "Could not send the email OTP. Please try again.",
+      msg: error || "Could not send the email OTP. Please try again.",
+      otpRecordId: otpRecord._id,
+      ...(isProduction ? {} : { otp: generatedOtp }),
+    };
+  }
+
   return {
     success: true,
-    message: "OTP sent successfully to email.",
-    msg: "OTP sent successfully to email.",
+    message: "OTP sent successfully to your email address.",
+    msg: "OTP sent successfully to your email address.",
     otpRecordId: otpRecord._id,
+    ...(isProduction ? {} : { otp: generatedOtp }),
   };
 };
 

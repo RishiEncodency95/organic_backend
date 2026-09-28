@@ -125,7 +125,7 @@ const parseJsonFields = (payload: any, files?: any) => {
   }
 
   if (files && files.image && files.image[0]) {
-    updateData.image = `/uploads/organic_expo/${files.image[0].filename}`;
+    updateData.image = `${files.image[0].filename}`;
   }
 
   return updateData;

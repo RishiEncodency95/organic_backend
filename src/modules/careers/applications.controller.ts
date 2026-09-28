@@ -8,7 +8,7 @@ import ApplicationEvent from "../../models/careers/ApplicationEvent.model";
 import { sendCandidateConfirmationEmail, sendAdminNotificationEmail } from "../../services/email.service";
 
 /**
- * Generate unique, server-side sequential Application ID: BOE2027-000001
+ * Generate unique, server-side sequential Application ID: BOE<current year>-000001
  */
 export const generateNextApplicationId = async (): Promise<string> => {
   const counter = await Counter.findOneAndUpdate(
@@ -18,7 +18,8 @@ export const generateNextApplicationId = async (): Promise<string> => {
   );
 
   const seqStr = String(counter.seq).padStart(6, "0");
-  return `BOE2027-${seqStr}`;
+  const year = new Date().getFullYear();
+  return `BOE${year}-${seqStr}`;
 };
 
 export const createApplication = async (req: Request, res: Response): Promise<void> => {
