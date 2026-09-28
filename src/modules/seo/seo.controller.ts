@@ -1,5 +1,75 @@
 import { Request, Response } from "express";
 import { seoService } from "./seo.service";
+import {
+  PAGE_INVENTORY,
+  SITE_ORIGIN,
+  findInventoryPage,
+  searchMetricsFor,
+} from "../../constants/pageAuditData";
+
+/**
+ * Calls the requested LLM provider and returns the raw text body.
+ * Gemini is used when the caller asks for it and GEMINI_API_KEY is configured;
+ * otherwise OpenAI is used with OPENAI_API_KEY.
+ */
+async function callSeoLlm(provider: "openai" | "gemini", prompt: string): Promise<string | null> {
+  if (provider === "gemini") {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) return null;
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(key)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                {
+                  text:
+                    "You are an expert technical SEO crawler and audit engine. Output ONLY raw JSON with no markdown fences.\n\n" +
+                    prompt,
+                },
+              ],
+            },
+          ],
+          generationConfig: { temperature: 0.7, responseMimeType: "application/json" },
+        }),
+      },
+    );
+    if (!res.ok) throw new Error(`Gemini responded with ${res.status}`);
+    const data: any = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts
+      ?.map((part: any) => part?.text ?? "")
+      .join("");
+    return text || null;
+  }
+
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) return null;
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "You are an expert technical SEO crawler and audit engine. Output ONLY raw JSON." },
+        { role: "user", content: prompt },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.7,
+    }),
+  });
+  if (!res.ok) throw new Error(`OpenAI responded with ${res.status}`);
+  const data: any = await res.json();
+  const text = data?.choices?.[0]?.message?.content;
+  if (!text) return null;
+  return text.replace(/^```(?:json)?/i, "").replace(/```\s*$/i, "").trim();
+}
 // Enterprise SEO Controller with OpenAI Audit Engine
 
 export const seoController = {
@@ -40,69 +110,51 @@ export const seoController = {
 
   async getSeoPages(req: Request, res: Response) {
     try {
-      const ALL_SITE_PAGES = [
-        "home",
-        "about-expo",
-        "why-visit",
-        "exhibitor-registration",
-        "contact-us",
-        "exhibition-categories",
-        "visitor-registration",
-        "participate-as-exhibitor",
-        "sponsorship-opportunities",
-        "floor-plan",
-        "conference-seminars",
-        "b2b-matchmaking",
-        "organic-certification",
-        "exhibitor-list",
-        "venue-pragati-maidan",
-        "travel-accommodation",
-        "advisory-board",
-        "supporting-organizations",
-        "media-press-releases",
-        "photo-video-gallery",
-        "downloads-brochures",
-        "faq",
-        "privacy-policy",
-        "terms-conditions",
-        "refund-cancellation",
-        "awards-recognition",
-        "startup-pavilion",
-        "export-buyer-lounge",
-      ];
-
       const pages = await Promise.all(
-        ALL_SITE_PAGES.map(async (pageId) => {
+        PAGE_INVENTORY.map(async (record) => {
+          const pageId = record.id;
           const data = await seoService.getSeoByPage(pageId, "live");
-          const title = (data.metaTitle || pageId.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())).replace(/^<title>|<\/title>$/gi, "");
+          const title = (data.metaTitle || record.title).replace(
+            /^<title>|<\/title>$/gi,
+            "",
+          );
           const desc = data.metaDescription || "";
           const tLength = title.length;
           const dLength = desc.length;
-          
+
           const isTitleOk = tLength >= 45 && tLength <= 65 && !title.includes("<title>");
           const isDescOk = dLength >= 110 && dLength <= 160;
 
-          const tStatus = !data.metaTitle ? "missing" : isTitleOk ? "ok" : tLength < 45 ? "too_short" : "too_long";
-          const dStatus = !data.metaDescription ? "missing" : isDescOk ? "ok" : dLength < 110 ? "too_short" : "too_long";
+          const tStatus = !data.metaTitle
+            ? "missing"
+            : isTitleOk
+              ? "ok"
+              : tLength < 45
+                ? "too_short"
+                : "too_long";
+          const dStatus = !desc
+            ? record.issue === "short"
+              ? "too_short"
+              : "missing"
+            : isDescOk
+              ? "ok"
+              : dLength < 110
+                ? "too_short"
+                : "too_long";
 
           const isHome = pageId === "home";
-          const issuesTotal = (isTitleOk ? 0 : 1) + (isDescOk ? 0 : 1);
-          const calculatedScore = issuesTotal === 0 ? 100 : issuesTotal === 1 ? 92 : 84;
-
-          const charCodeSum = pageId.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-          const wordCount = isHome ? 1420 : 450 + (charCodeSum % 950);
-          const inLinks = isHome ? 26 : 5 + (charCodeSum % 18);
-          const outLinks = isHome ? 32 : 8 + (charCodeSum % 15);
-          const lcpMs = isHome ? 1240 : 1100 + (charCodeSum % 850);
-          const cls = parseFloat((0.005 + (charCodeSum % 35) / 1000).toFixed(3));
-          const clicks = isHome ? 450 : 25 + (charCodeSum % 280);
-          const impressions = isHome ? 12800 : 800 + (charCodeSum % 4800);
-          const position = parseFloat((isHome ? 1.4 : 2.5 + (charCodeSum % 140) / 10).toFixed(1));
+          const issuesTotal = record.issue === "short" ? 1 : 0;
+          const wordCount = record.words;
+          const inLinks = record.inLinks;
+          const outLinks = Math.max(4, Math.round(wordCount / 60));
+          const lcpMs = Math.round(record.lcp * 1000);
+          const cls = record.cls;
+          const { clicks, impressions, ctr, position } = searchMetricsFor(record);
 
           return {
             id: pageId,
-            url: data.canonicalUrl || `https://bharatorganicexpo.com/${pageId === "home" ? "" : pageId}`,
-            path: pageId === "home" ? "/" : `/${pageId}`,
+            url: data.canonicalUrl || `${SITE_ORIGIN}${record.path}`,
+            path: record.path,
             title,
             titleLength: tLength,
             titleStatus: tStatus,
@@ -114,25 +166,36 @@ export const seoController = {
             indexabilityReason: null,
             canonical: data.canonicalUrl || null,
             canonicalStatus: data.canonicalUrl ? "self" : "missing",
-            score: calculatedScore,
-            issueCounts: { critical: 0, warning: issuesTotal > 1 ? 1 : 0, notice: issuesTotal > 0 ? 1 : 0, total: issuesTotal },
+            score: Math.min(99, record.score),
+            issueCounts: {
+              critical: 0,
+              warning: issuesTotal > 1 ? 1 : 0,
+              notice: issuesTotal,
+              total: issuesTotal,
+            },
             issueCategories: ["On-page", "Metadata"],
             h1: [title],
             h1Status: "ok",
             hierarchyStatus: "ok",
-            headingCounts: { h1: 1, h2: Math.max(2, Math.floor(wordCount / 250)), h3: Math.max(1, Math.floor(wordCount / 400)) },
+            headingCounts: {
+              h1: isHome ? 7 : 1,
+              h2: Math.max(2, Math.floor(wordCount / 250)),
+              h3: Math.max(1, Math.floor(wordCount / 400)),
+            },
             wordCount,
             inLinks,
             outLinks,
             brokenLinks: 0,
             depth: isHome ? 0 : 1,
-            isOrphan: false,
+            isOrphan: inLinks === 0,
             inSitemap: true,
-            schemaTypes: isHome ? ["Organization", "WebSite", "Event"] : ["WebPage", "BreadcrumbList"],
+            schemaTypes: isHome
+              ? ["Organization", "WebSite", "Event"]
+              : ["WebPage", "BreadcrumbList"],
             schemaStatus: "valid_with_breadcrumb",
             imageCount: Math.max(2, Math.floor(wordCount / 200)),
             imagesMissingAlt: 0,
-            responseTimeMs: Math.max(120, Math.floor(lcpMs / 6)),
+            responseTimeMs: Math.max(120, Math.round(lcpMs / 6)),
             keywordStatus: "ok",
             openGraphStatus: "valid",
             twitterStatus: "valid",
@@ -140,10 +203,16 @@ export const seoController = {
             failedRequestCount: 0,
             renderBlockingCount: 0,
             cdnStatus: "detected",
-            performance: { score: Math.min(99, calculatedScore + 2), lcpMs, cls, isFieldData: true, fetchedAt: new Date().toISOString() },
-            search: { clicks, impressions, ctr: parseFloat(((clicks / impressions) * 100).toFixed(1)), position, updatedAt: new Date().toISOString() },
-            analytics: { views: clicks * 3, users: Math.floor(clicks * 2.2), engagementRate: 72.4 },
-            lastCrawledAt: new Date().toISOString()
+            performance: {
+              score: record.score,
+              lcpMs,
+              cls,
+              isFieldData: true,
+              fetchedAt: new Date().toISOString(),
+            },
+            search: { clicks, impressions, ctr, position, updatedAt: new Date().toISOString() },
+            analytics: null,
+            lastCrawledAt: new Date().toISOString(),
           };
         })
       );
@@ -206,24 +275,53 @@ export const seoController = {
 
   async generatePageRecommendations(req: Request, res: Response) {
     try {
-      const pageId = (Array.isArray(req.params.id) ? req.params.id[0] : req.params.id) || "home";
-      const pageTitle = pageId.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
-      const pageUrl = `https://bharatorganicexpo.com/${pageId === "home" ? "" : pageId}`;
+      const rawId = (Array.isArray(req.params.id) ? req.params.id[0] : req.params.id) || "home";
+      const pageId = rawId.replace(/^\/+|\/+$/g, "") || "home";
+      const record = findInventoryPage(pageId);
+      const pageTitle = record?.label || pageId.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+      const pageUrl = `${SITE_ORIGIN}${record?.path ?? (pageId === "home" ? "/" : `/${pageId}`)}`;
 
       const seoData = await seoService.getSeoByPage(pageId, "live");
-      const currentTitle = seoData.metaTitle || pageTitle;
-      const currentDesc = seoData.metaDescription || "Join Bharat Organic Expo 2027";
-      const currentKeywords = seoData.metaKeywords || "organic expo, bio trade";
+      const currentTitle = seoData.metaTitle || record?.title || pageTitle;
+      const currentDesc = seoData.metaDescription || "";
+      const currentKeywords = seoData.metaKeywords || "";
 
-      const apiKey = process.env.OPENAI_API_KEY;
+      // Real crawl / Search Console telemetry for THIS route.
+      const telemetry = record
+        ? {
+            routeScore: record.score,
+            indexableWords: record.words,
+            internalLinks: record.inLinks,
+            lcpSeconds: record.lcp,
+            cls: record.cls,
+            searchConsole: searchMetricsFor(record),
+            crawlerIssue: record.issue === "short" ? "short meta description" : "none",
+          }
+        : null;
 
-      let aiSummary = `Full Page Technical Audit Report for '/${pageId === "home" ? "" : pageId}': High structural health detected. Strategic improvements recommended across search visibility, schema depth, and SERP CTR.`;
-      let positiveSignals: string[] = [
-        `[Metadata & Indexability] Page title '${currentTitle}' has valid length and target keywords.`,
-        "[HTTP & Server Health] Clean 200 OK status with fast server response time.",
-        "[Crawling & Indexing] Indexable with active Robots index/follow tags.",
-        "[Canonical Structure] Canonical URL is valid and self-referencing."
-      ];
+      const requestedProvider = (
+        req.body.provider ||
+        req.body.engine ||
+        "openai"
+      ).toLowerCase();
+      const openAiKey = process.env.OPENAI_API_KEY;
+      const geminiKey = process.env.GEMINI_API_KEY;
+      const useGemini = requestedProvider === "gemini" && Boolean(geminiKey);
+      const providerReady = useGemini ? Boolean(geminiKey) : Boolean(openAiKey);
+      const providerName: "openai" | "gemini" = useGemini ? "gemini" : "openai";
+
+      const routePath = record?.path ?? (pageId === "home" ? "/" : `/${pageId}`);
+      let aiSummary = telemetry
+        ? `Full Page Technical Audit Report for '${routePath}': on-page score ${telemetry.routeScore}/100 across ${telemetry.indexableWords} indexable words with ${telemetry.internalLinks} internal links. Field LCP ${telemetry.lcpSeconds}s and CLS ${telemetry.cls}. Search Console reports ${telemetry.searchConsole.clicks} clicks from ${telemetry.searchConsole.impressions} impressions at average position ${telemetry.searchConsole.position}. Crawler flagged: ${telemetry.crawlerIssue}. Strategic improvements recommended across search visibility, schema depth, and SERP CTR.`
+        : `Full Page Technical Audit Report for '${routePath}': no crawl telemetry is available for this route yet — run a site audit first, then re-generate this report.`;
+      let positiveSignals: string[] = telemetry
+        ? [
+            `[Metadata & Indexability] Page title '${currentTitle}' is ${currentTitle.length} characters${currentDesc ? ` and the meta description is ${currentDesc.length} characters` : " (no meta description set in the CMS)"}.`,
+            `[Content Depth] ${telemetry.indexableWords} indexable words supported by ${telemetry.internalLinks} internal links pointing at this route.`,
+            `[Core Web Vitals] Field LCP ${telemetry.lcpSeconds}s and CLS ${telemetry.cls} on this route.`,
+            `[Search Demand] ${telemetry.searchConsole.clicks} clicks from ${telemetry.searchConsole.impressions} impressions at average position ${telemetry.searchConsole.position}.`,
+          ]
+        : ["[Crawl Telemetry] No inventory record for this route — run a site audit to populate real page metrics."];
       let items: any[] = [
         {
           ruleId: "heading_structure_hierarchy",
@@ -286,14 +384,26 @@ export const seoController = {
         }
       ];
 
-      if (apiKey) {
+      if (providerReady) {
         try {
           const prompt = `You are a Principal Enterprise Technical SEO Auditor executing an exhaustive 10x deep technical SEO audit for route "${pageTitle}" (${pageUrl}) of Bharat Organic Expo 2027.
-Real-Time Crawled Page Data:
-- Page Path: /${pageId === "home" ? "" : pageId}
+Real-Time Crawled Page Data (measured — use these exact numbers, never invent others):
+- Page Path: ${routePath}
 - Meta Title: "${currentTitle}" (${currentTitle.length} chars)
-- Meta Description: "${currentDesc}" (${currentDesc.length} chars)
-- Target Keywords: "${currentKeywords}"
+- Meta Description: ${currentDesc ? `"${currentDesc}" (${currentDesc.length} chars)` : "NOT SET in the CMS"}
+- Target Keywords: ${currentKeywords ? `"${currentKeywords}"` : "not declared"}
+- On-page score: ${telemetry ? `${telemetry.routeScore}/100` : "unavailable"}
+- Indexable words: ${telemetry ? telemetry.indexableWords : "unavailable"}
+- Internal links pointing here: ${telemetry ? telemetry.internalLinks : "unavailable"}
+- Field LCP / CLS: ${telemetry ? `${telemetry.lcpSeconds}s / ${telemetry.cls}` : "unavailable"}
+- Search Console: ${
+            telemetry
+              ? `${telemetry.searchConsole.clicks} clicks, ${telemetry.searchConsole.impressions} impressions, CTR ${telemetry.searchConsole.ctr}%, average position ${telemetry.searchConsole.position}`
+              : "unavailable"
+          }
+- Crawler issue flag: ${telemetry ? telemetry.crawlerIssue : "unavailable"}
+
+Write every recommendation for THIS route only. Quote the measured numbers above wherever you cite a metric, and prioritise the items that are actually wrong for this page.
 
 Generate an EXTREMELY IN-DEPTH, MULTI-SECTION enterprise audit report in JSON format with AT LEAST 10 distinct, comprehensive audit items in array "items", covering each of these areas:
 1. Title Tag Optimization & SERP CTR Weight
@@ -466,35 +576,16 @@ Return ONLY valid JSON matching this schema:
 }
 Ensure strictly valid JSON format.`;
 
-          const openAiRes = await fetch("https://api.openai.com/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${apiKey}`,
-            },
-            body: JSON.stringify({
-              model: "gpt-4o-mini",
-              messages: [
-                { role: "system", content: "You are an expert technical SEO crawler and audit engine. Output ONLY raw JSON." },
-                { role: "user", content: prompt },
-              ],
-              response_format: { type: "json_object" },
-              temperature: 0.7,
-            }),
-          });
+          const rawJson = await callSeoLlm(providerName, prompt);
 
-          if (openAiRes.ok) {
-            const data: any = await openAiRes.json();
-            const text = data?.choices?.[0]?.message?.content;
-            if (text) {
-              const parsed = JSON.parse(text);
-              if (parsed.summary) aiSummary = parsed.summary;
-              if (Array.isArray(parsed.positiveSignals)) positiveSignals = parsed.positiveSignals;
-              if (Array.isArray(parsed.items)) items = parsed.items;
-            }
+          if (rawJson) {
+            const parsed = JSON.parse(rawJson);
+            if (parsed.summary) aiSummary = parsed.summary;
+            if (Array.isArray(parsed.positiveSignals)) positiveSignals = parsed.positiveSignals;
+            if (Array.isArray(parsed.items)) items = parsed.items;
           }
         } catch (e: any) {
-          console.error("OpenAI audit error:", e?.message);
+          console.error(`${providerName} audit error:`, e?.message);
         }
       }
 
@@ -520,7 +611,7 @@ Ensure strictly valid JSON format.`;
           recommendedFix: `Front-load primary targeted terms for ${pageTitle} followed by brand identity. Target length: 50-60 characters. Current: ${titleLen} chars.`,
           implementation: `<title>Bharat Organic Expo 2027 | ${pageTitle} & Bio-Agriculture</title>`,
           suggestedTitle: `Bharat Organic Expo 2027 | ${pageTitle} & Bio-Agriculture`,
-          suggestedDescription: `Discover official ${pageTitle.toLowerCase()} details for Bharat Organic Expo 2027 at Pragati Maidan, New Delhi. Connect with 10,000+ certified organic food exporters & bio brands!`,
+          suggestedDescription: `Discover official ${pageTitle.toLowerCase()} details for Bharat Organic Expo 2027 at Pragati Maidan, New Delhi. Connect with certified organic food exporters and bio brands from India!`,
           headingSuggestions: [`${pageTitle} Highlights`, "Organic Certification Standards", "B2B Buyer Registration"],
           internalLinkSuggestions: [
             { anchorText: "View Exhibitor List", fromOrTo: "/exhibitor-list", reason: "Pass link equity to conversion page" },
@@ -545,9 +636,9 @@ Ensure strictly valid JSON format.`;
           title: `Expand Meta Description & CTA for ${pageTitle}`,
           whyItMatters: `Meta description on route '/${pageId === "home" ? "" : pageId}' is currently ${descLen} characters. Snippets between 110 and 160 characters maximize organic Click-Through Rate (CTR).`,
           recommendedFix: `Craft a 140-150 character meta description featuring secondary search terms ('Organic Food Exhibition', 'B2B Buyers') and a call to action. Current: ${descLen} chars.`,
-          implementation: `<meta name="description" content="Discover official ${pageTitle.toLowerCase()} details for Bharat Organic Expo 2027 at Pragati Maidan, New Delhi. Connect with 10,000+ certified organic food exporters & bio brands!" />`,
+          implementation: `<meta name="description" content="Discover official ${pageTitle.toLowerCase()} details for Bharat Organic Expo 2027 at Pragati Maidan, New Delhi. Connect with certified organic food exporters and bio brands from India!" />`,
           suggestedTitle: null,
-          suggestedDescription: `Discover official ${pageTitle.toLowerCase()} details for Bharat Organic Expo 2027 at Pragati Maidan, New Delhi. Connect with 10,000+ certified organic food exporters & bio brands!`,
+          suggestedDescription: `Discover official ${pageTitle.toLowerCase()} details for Bharat Organic Expo 2027 at Pragati Maidan, New Delhi. Connect with certified organic food exporters and bio brands from India!`,
           headingSuggestions: [],
           internalLinkSuggestions: [],
           schemaSuggestion: null,
@@ -555,29 +646,30 @@ Ensure strictly valid JSON format.`;
       }
 
       if (isTitleOk && isDescOk && items.length === 0) {
-        aiSummary = `✓ Exceptional Technical Health for route '/${pageId === "home" ? "" : pageId}' (${pageTitle}): Title tag (${titleLen} chars) and Meta description (${descLen} chars) are fully optimized. 100% SERP compliant.`;
+        aiSummary = `Technical health check for route '${routePath}' (${pageTitle}): title tag is ${titleLen} characters and the meta description is ${descLen} characters, both inside the recommended length targets for this route.`;
         positiveSignals = [
-          `[Perfect Title Tag] Title '${currentTitle}' (${titleLen} chars) is fully optimized for SERP visibility.`,
-          `[Perfect Meta Description] Meta description (${descLen} chars) meets Google CTR recommendations.`,
+          ...positiveSignals,
+          `[Perfect Title Tag] Title '${currentTitle}' (${titleLen} chars) is inside the 45-65 character target.`,
+          `[Perfect Meta Description] Meta description (${descLen} chars) is inside the 110-160 character target.`,
           `[HTTP Status & SSL] Route returns 200 OK status code over HTTPS SSL connection.`,
           `[Robots & Indexability] Route is indexable with active index,follow meta directives.`,
-          `[Canonical Architecture] Self-referencing canonical tag verified for route /${pageId === "home" ? "" : pageId}.`
+          `[Canonical Architecture] Self-referencing canonical tag verified for route ${routePath}.`
         ];
       }
-
-      const reqProvider = (req.body.provider || req.body.engine || "openai").toLowerCase();
-      const isGemini = reqProvider === "gemini";
 
       const recommendation = {
         id: `rec-page-${pageId}-${Date.now()}`,
         scope: "page",
         url: pageUrl,
+        route: routePath,
         summary: aiSummary,
         positiveSignals,
         items,
+        telemetry,
         generatedAt: new Date().toISOString(),
-        model: isGemini ? "neural-v2" : "neural-v1",
-        provider: isGemini ? "secondary" : "primary",
+        model: providerName === "gemini" ? "gemini-1.5-flash" : "gpt-4o-mini",
+        provider: providerName,
+        providerAvailable: providerReady,
         status: "completed",
         error: null,
       };
