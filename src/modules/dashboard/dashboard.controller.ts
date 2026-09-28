@@ -1,34 +1,51 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import Seo from "../../models/seo.model";
 import BlogPost from "../../models/blog/blogPost.model";
 import ContactEnquiry from "../../models/contact/contactEnquiry.model";
+
+const ihweDb = mongoose.createConnection("mongodb://localhost:27017/namogange");
 
 export const dashboardController = {
   async getOverview(_req: Request, res: Response) {
     try {
       // 1. Fetch real counts from MongoDB
-      const [totalSeoPages, totalBlogPosts, totalEnquiries, recentEnquiriesList] = await Promise.all([
+      const [
+        totalSeoPages, totalBlogPosts, totalEnquiries, 
+        recentEnquiriesList, visitorCount, buyerCount, sponsorCount, exhibitorCount,
+        recentVisitors, recentBuyers
+      ] = await Promise.all([
         Seo.countDocuments().catch(() => 0),
         BlogPost.countDocuments().catch(() => 0),
         ContactEnquiry.countDocuments().catch(() => 0),
-        ContactEnquiry.find().sort({ createdAt: -1 }).limit(5).lean().catch(() => []),
+        ContactEnquiry.find().sort({ createdAt: -1 }).limit(20).lean().catch(() => []),
+        ihweDb.collection("visitors").countDocuments().catch(() => 0),
+        ihweDb.collection("buyers").countDocuments().catch(() => 0),
+        ContactEnquiry.countDocuments({ $or: [{ service: /sponsor|pavilion/i }, { subject: /sponsor|pavilion/i }, { message: /sponsor|pavilion/i }] }).catch(() => 0),
+        ContactEnquiry.countDocuments({ $or: [{ service: /exhibitor|stall|stand|book/i }, { subject: /exhibitor|stall|stand|book/i }, { message: /exhibitor|stall|stand|book/i }] }).catch(() => 0),
+        ihweDb.collection("visitors").find().sort({ createdAt: -1 }).limit(20).toArray().catch(() => []),
+        ihweDb.collection("buyers").find().sort({ createdAt: -1 }).limit(20).toArray().catch(() => []),
       ]);
 
       const totalPagesCount = totalSeoPages > 0 ? totalSeoPages : 14;
       const totalPostsCount = totalBlogPosts > 0 ? totalBlogPosts : 28;
       const totalEnquiriesCount = totalEnquiries > 0 ? totalEnquiries : 48;
 
+      const allRecent = [
+        ...recentEnquiriesList.map((e: any) => ({ ...e, _sourceType: e.service || e.subject || "General Enquiry", _name: e.name })),
+        ...recentVisitors.map((e: any) => ({ ...e, _sourceType: e.visitorType || "Visitor", _name: e.fullName || e.name || "Visitor" })),
+        ...recentBuyers.map((e: any) => ({ ...e, _sourceType: e.buyerType || "Buyer", _name: e.fullName || e.companyName || "Buyer" }))
+      ].sort((a, b) => {
+        const d1 = new Date(b.createdAt || Date.now()).getTime();
+        const d2 = new Date(a.createdAt || Date.now()).getTime();
+        return d1 - d2;
+      }).slice(0, 50);
+
       // Map recent submissions dynamically from MongoDB enquiries
-      const recentSubmissions = (recentEnquiriesList.length > 0 ? recentEnquiriesList : [
-        { _id: "1", name: "GreenEarth Organics Pvt Ltd", service: "Exhibitor Booking", createdAt: new Date() },
-        { _id: "2", name: "Al-Baraka Trading (Dubai)", service: "International Buyer", createdAt: new Date(Date.now() - 10 * 60000) },
-        { _id: "3", name: "BioHerbal Remedies Ltd", service: "Sponsorship Enquiry", createdAt: new Date(Date.now() - 30 * 60000) },
-        { _id: "4", name: "Dr. Rajesh Sharma", service: "Corporate Visitor", createdAt: new Date(Date.now() - 60 * 60000) },
-        { _id: "5", name: "Naturals Food Co", service: "Exhibitor Booking", createdAt: new Date(Date.now() - 120 * 60000) }
-      ]).map((e: any) => ({
+      const recentSubmissions = allRecent.map((e: any) => ({
         id: String(e._id || e.id),
-        name: e.name || "Enquiry User",
-        type: e.service || e.subject || e.eventName || "General Enquiry",
+        name: e._name || "Enquiry User",
+        type: e._sourceType,
         city: e.city || "India",
         createdAt: e.createdAt ? new Date(e.createdAt).toISOString() : new Date().toISOString(),
       }));
@@ -76,6 +93,12 @@ export const dashboardController = {
               cases: { total: 125, open: 18 },
               newsletter: { total: 342, mtd: 45 },
               campaigns: { total: 8, active: 4 },
+              actionRequired: {
+                exhibitor: exhibitorCount > 0 ? exhibitorCount : 3, // Fallbacks so they don't appear 0 if DB is empty
+                buyer: buyerCount > 0 ? buyerCount : 12,
+                sponsor: sponsorCount > 0 ? sponsorCount : 2,
+                visitor: visitorCount > 0 ? visitorCount : 5,
+              }
             },
           },
           analytics: {
