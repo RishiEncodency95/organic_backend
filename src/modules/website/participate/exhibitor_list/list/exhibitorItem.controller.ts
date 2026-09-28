@@ -7,6 +7,7 @@ import {
   getExhibitorItemByIdService,
   updateExhibitorItemByIdService,
   deleteExhibitorItemByIdService,
+  bulkCreateExhibitorItemsService,
 } from "./exhibitorItem.service";
 
 export const getAllExhibitorItems = asyncHandler(async (_req: Request, res: Response) => {
@@ -19,7 +20,13 @@ export const createExhibitorItem = asyncHandler(async (req: Request, res: Respon
   res.status(201).json(new ApiResponse(201, "Exhibitor item created successfully", data));
 });
 
-export const getExhibitorItemById = asyncHandler(async (req: Request, res: Response) => {
+export const bulkCreateExhibitorItems = asyncHandler(async (req: Request, res: Response) => {
+  const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+  const data = await bulkCreateExhibitorItemsService(req.body, files);
+  res.status(201).json(new ApiResponse(201, `${data.length} exhibitor(s) uploaded successfully`, data));
+});
+
+export const getExhibitorItemById =asyncHandler(async (req: Request, res: Response) => {
   const id = req.params.id as string;
   const data = await getExhibitorItemByIdService(id);
   res.status(200).json(new ApiResponse(200, "Exhibitor item fetched successfully", data));

@@ -34,8 +34,11 @@ class CloudinaryStorage implements multer.StorageEngine {
       return;
     }
 
+    // Images are always uploaded as "image": with "auto", Cloudinary stores SVGs as "raw"
+    // files (…/raw/upload/…, no extension) that don't render in an <img> tag.
+    const resourceType = file.mimetype.startsWith("image/") ? "image" : "auto";
     const uploadStream = cloudinary.uploader.upload_stream(
-      { folder: this.folder, resource_type: "auto" },
+      { folder: this.folder, resource_type: resourceType },
       (error, result) => {
         if (error || !result) {
           callback(error || new Error("Cloudinary upload failed"));

@@ -116,6 +116,56 @@ export const createExhibitorItemService = async (payload: any, files?: any) => {
   return await ExhibitorItem.create(updateData);
 };
 
+export const MAX_BULK_EXHIBITOR_IMAGES = 10;
+
+// "heritage-oils_logo.png" -> "heritage oils logo"
+const nameFromFilename = (originalName: string) =>
+  originalName.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim() || "Exhibitor";
+
+/**
+ * Creates one exhibitor per uploaded image, all sharing a single alt text.
+ * Files arrive already on Cloudinary (see createUploader); the admin "Max Image Upload Size"
+ * setting intentionally does not apply to bulk uploads.
+ */
+export const bulkCreateExhibitorItemsService = async (payload: any, files: Express.Multer.File[] = []) => {
+  if (files.length === 0) throw ApiError.badRequest("Please select at least one image to upload.");
+  if (files.length > MAX_BULK_EXHIBITOR_IMAGES) {
+    throw ApiError.badRequest(`You can upload at most ${MAX_BULK_EXHIBITOR_IMAGES} images at once.`);
+  }
+  const nonImage = files.find((f) => !f.mimetype.startsWith("image/"));
+  if (nonImage) throw ApiError.badRequest(`"${nonImage.originalname}" is not an image.`);
+
+  const altText = String(payload?.altText || "").trim();
+  if (!altText) throw ApiError.badRequest("A common alt text is required for bulk upload.");
+
+  const category = String(payload?.category || "").trim() || "ORGANIC FOOD";
+  const location = String(payload?.location || "").trim() || "India";
+  const status = payload?.status === "Draft" ? "Draft" : "Published";
+  const updatedBy = String(payload?.updatedBy || "").trim();
+
+  const highestItem = await ExhibitorItem.findOne().sort({ order: -1 });
+  let nextOrder = highestItem && typeof highestItem.order === "number" ? highestItem.order + 1 : 1;
+
+  const docs = files.map((file) => {
+    const name = nameFromFilename(file.originalname);
+    return {
+      name,
+      title: name,
+      image: file.filename,
+      logo: file.filename,
+      altText,
+      category,
+      location,
+      status,
+      order: nextOrder++,
+      fileSize: `${(file.size / 1024).toFixed(1)} KB`,
+      ...(updatedBy ? { updatedBy } : {}),
+    };
+  });
+
+  return await ExhibitorItem.insertMany(docs);
+};
+
 import mongoose from "mongoose";
 
 const getQueryForId = (id: string) => {

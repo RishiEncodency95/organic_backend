@@ -21,10 +21,12 @@ import websiteGalleryRouter from "../modules/website/gallery/gallery.routes";
 import websiteAwardsRouter from "../modules/website/websiteAwards.routes";
 import contactEnquiryRouter from "../modules/website/contact/contactEnquiry.routes";
 import verifyRouter from "../modules/website/contact/verify.routes";
+import partnershipEnquiryRouter from "../modules/website/contact/partnershipEnquiry.routes";
 import blogPostRouter from "../modules/blogPost/blogPost.routes";
 import careersRouter from "./careers.routes";
 import msmeRouter from "./msme.routes";
 import dashboardRouter from "../modules/dashboard/dashboard.routes";
+import systemServicesRouter from "../modules/systemServices/systemServices.routes";
 
 const router = Router();
 
@@ -38,6 +40,7 @@ router.get("/health", (req, res) => {
 });
 
 // API Routes
+router.use("/system-services", systemServicesRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/careers", careersRouter);
 router.use("/admin/careers", careersRouter);
@@ -70,6 +73,7 @@ router.use("/gallery", websiteGalleryRouter);
 router.use("/contact-enquiry", contactEnquiryRouter);
 router.use("/website/contact-enquiry", contactEnquiryRouter);
 router.use("/website/contact", contactEnquiryRouter);
+router.use("/partnership-enquiry", partnershipEnquiryRouter);
 router.use("/verify", verifyRouter);
 router.use("/website/verify", verifyRouter);
 
