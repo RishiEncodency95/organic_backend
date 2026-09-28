@@ -29,7 +29,13 @@ const awardsNominationSchema = new Schema(
     mediaFileName: { type: String, default: "" },
     socialLink: { type: String, default: "" },
     declaration: { type: Boolean, default: false },
-    status: { type: String, default: "pending" },
+    mobileVerified: { type: Boolean, default: false },
+    emailVerified: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ["pending", "shortlisted", "approved", "rejected"],
+      default: "pending",
+    },
   },
   { timestamps: true }
 );

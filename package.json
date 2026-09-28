@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "seed:admin": "tsx scripts/seed_superadmin.ts",
+    "seed:career-options": "tsx scripts/seed_career_options.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

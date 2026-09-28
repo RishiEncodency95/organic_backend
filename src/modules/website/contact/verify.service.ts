@@ -2,6 +2,9 @@ import Otp from "../../../models/contact/otp.model";
 import { env } from "../../../config/env";
 import { sendOtpEmail } from "../../../services/otpEmail.service";
 
+// How long a verified OTP stays valid as proof of ownership for a later form submit.
+const VERIFIED_OTP_TTL_MS = 2 * 60 * 60 * 1000;
+
 export const sendPhoneOtpService = async (
   phone: string,
   profile: string = "CONTACT_ENQUIRY",
@@ -148,8 +151,9 @@ export const verifyPhoneOtpService = async (phone: string, otp: string) => {
     };
   }
 
-  // Mark as verified
+  // Mark as verified, and keep the record around long enough for forms that check it at submit.
   record.isVerified = true;
+  record.expiresAt = new Date(Date.now() + VERIFIED_OTP_TTL_MS);
   await record.save();
 
   return {
@@ -223,6 +227,7 @@ export const verifyEmailOtpService = async (email: string, otp: string) => {
   }
 
   record.isVerified = true;
+  record.expiresAt = new Date(Date.now() + VERIFIED_OTP_TTL_MS);
   await record.save();
 
   return {
