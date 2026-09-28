@@ -26,6 +26,7 @@ import blogPostRouter from "../modules/blogPost/blogPost.routes";
 import careersRouter from "./careers.routes";
 import msmeRouter from "./msme.routes";
 import dashboardRouter from "../modules/dashboard/dashboard.routes";
+import systemServicesRouter from "../modules/systemServices/systemServices.routes";
 
 const router = Router();
 
@@ -39,6 +40,7 @@ router.get("/health", (req, res) => {
 });
 
 // API Routes
+router.use("/system-services", systemServicesRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/careers", careersRouter);
 router.use("/admin/careers", careersRouter);
