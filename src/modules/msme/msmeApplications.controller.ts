@@ -7,6 +7,21 @@ import { sendMsmeCandidateConfirmationEmail, sendMsmeAdminNotificationEmail } fr
 
 const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
 
+// Pricing lives on the server so the amount charged can never be chosen by the browser.
+const STALL_RATE = 11000;
+const GST_RATE = 0.18;
+const STALL_SIZES = [9, 12, 15, 18];
+
+/** Total payable (₹, inclusive of GST) for a stall size, or null if the size isn't one we offer. */
+const stallAmount = (stallSize: unknown): number | null => {
+  const size = Number(stallSize);
+  if (!STALL_SIZES.includes(size)) return null;
+  return Math.round(size * STALL_RATE * (1 + GST_RATE));
+};
+
+const razorpayAuthHeader = () =>
+  `Basic ${Buffer.from(`${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`).toString("base64")}`;
+
 /**
  * Generate unique, server-side sequential Application ID: MSME<current year>-000001
  */
@@ -91,6 +106,16 @@ export const saveParticipationDetails = async (req: Request, res: Response): Pro
       return;
     }
 
+    if (application.payment?.status === "PAID") {
+      res.status(409).json({ success: false, message: "This application has already been paid for and submitted." });
+      return;
+    }
+
+    if (participation.stallSize !== undefined && stallAmount(participation.stallSize) === null) {
+      res.status(400).json({ success: false, message: `Stall size must be one of ${STALL_SIZES.join(", ")} sqm.` });
+      return;
+    }
+
     application.participation = { ...application.participation, ...participation };
     application.status = "PARTICIPATION_SAVED";
     await application.save();
@@ -118,16 +143,23 @@ export const saveParticipationDetails = async (req: Request, res: Response): Pro
 export const recordPaymentOrder = async (req: Request, res: Response): Promise<void> => {
   try {
     const id = String(req.params.id);
-    const { amount, currency } = req.body;
-
-    if (!amount || typeof amount !== "number" || amount <= 0) {
-      res.status(400).json({ success: false, message: "A valid amount is required." });
-      return;
-    }
+    const currency = "INR";
 
     const application = await findApplication(id);
     if (!application) {
       res.status(404).json({ success: false, message: "Application not found." });
+      return;
+    }
+
+    if (application.payment?.status === "PAID") {
+      res.status(409).json({ success: false, message: "This application has already been paid for and submitted." });
+      return;
+    }
+
+    // Any amount the client sends is ignored — it is derived from the saved stall size.
+    const amount = stallAmount(application.participation?.stallSize);
+    if (amount === null) {
+      res.status(400).json({ success: false, message: "Please complete Step 2 (Participation Details) before paying." });
       return;
     }
 
@@ -136,13 +168,12 @@ export const recordPaymentOrder = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const basicAuth = Buffer.from(`${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`).toString("base64");
     const orderRes = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
-      headers: { Authorization: `Basic ${basicAuth}`, "Content-Type": "application/json" },
+      headers: { Authorization: razorpayAuthHeader(), "Content-Type": "application/json" },
       body: JSON.stringify({
-        amount: Math.round(amount * 100), // Razorpay expects paise
-        currency: currency || "INR",
+        amount: amount * 100, // Razorpay expects paise
+        currency,
         receipt: `msme_${application.applicationId}`,
       }),
     });
@@ -159,9 +190,13 @@ export const recordPaymentOrder = async (req: Request, res: Response): Promise<v
     application.payment = {
       ...application.payment,
       amount,
-      currency: currency || "INR",
+      currency,
       razorpayOrderId: order.id,
+      razorpayPaymentId: undefined,
+      razorpaySignature: undefined,
       status: "PENDING",
+      failureReason: undefined,
+      failedAt: undefined,
     };
     application.status = "PAYMENT_PENDING";
     await application.save();
@@ -251,6 +286,8 @@ export const confirmPaymentAndSubmit = async (req: Request, res: Response): Prom
       razorpaySignature,
       status: "PAID",
       paidAt: new Date(),
+      failureReason: undefined,
+      failedAt: undefined,
     };
     application.status = "SUBMITTED";
     application.submittedAt = new Date();
@@ -290,6 +327,69 @@ export const confirmPaymentAndSubmit = async (req: Request, res: Response): Prom
     res.status(500).json({
       success: false,
       message: "Could not confirm payment. Please contact support with your Application ID.",
+      error: (error as Error).message,
+    });
+  }
+};
+
+/**
+ * Records a failed checkout attempt. The browser only tells us which payment failed —
+ * the failure itself is read back from Razorpay, so nobody can mark an application
+ * failed by calling this with made-up data, and a paid application is never touched.
+ */
+export const recordPaymentFailure = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = String(req.params.id);
+    const { razorpayPaymentId } = req.body;
+
+    if (!razorpayPaymentId || typeof razorpayPaymentId !== "string") {
+      res.status(400).json({ success: false, message: "razorpayPaymentId is required." });
+      return;
+    }
+
+    const application = await findApplication(id);
+    if (!application) {
+      res.status(404).json({ success: false, message: "Application not found." });
+      return;
+    }
+
+    if (application.payment?.status === "PAID") {
+      res.status(200).json({ success: true, message: "Application is already paid.", data: { status: application.status } });
+      return;
+    }
+
+    if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) {
+      res.status(500).json({ success: false, message: "Payments are not configured on the server." });
+      return;
+    }
+
+    const paymentRes = await fetch(
+      `https://api.razorpay.com/v1/payments/${encodeURIComponent(razorpayPaymentId)}`,
+      { headers: { Authorization: razorpayAuthHeader() } }
+    );
+    const payment = (await paymentRes.json()) as { order_id?: string; status?: string; error_description?: string };
+
+    if (!paymentRes.ok || payment.order_id !== application.payment?.razorpayOrderId || payment.status !== "failed") {
+      res.status(400).json({ success: false, message: "This payment is not a failed payment for this application." });
+      return;
+    }
+
+    application.payment = {
+      ...application.payment,
+      razorpayPaymentId,
+      status: "FAILED",
+      failureReason: payment.error_description || "Payment failed.",
+      failedAt: new Date(),
+    };
+    application.status = "PAYMENT_FAILED";
+    await application.save();
+
+    res.status(200).json({ success: true, message: "Payment failure recorded.", data: { status: application.status } });
+  } catch (error) {
+    console.error("Record payment failure error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Could not record the payment failure.",
       error: (error as Error).message,
     });
   }

@@ -1,5 +1,6 @@
 import Otp from "../../../models/contact/otp.model";
 import { env } from "../../../config/env";
+import { sendOtpEmail } from "../../../services/otpEmail.service";
 
 export const sendPhoneOtpService = async (
   phone: string,
@@ -177,11 +178,31 @@ export const sendEmailOtpService = async (
     expiresAt: new Date(Date.now() + 10 * 60 * 1000),
   });
 
+  // This used to report "OTP sent successfully" without ever sending anything, so the
+  // browser started its resend countdown for a mail that was never posted. Mirrors the
+  // WhatsApp path above: only a delivery the mail server actually accepted counts.
+  const { sent, error } = await sendOtpEmail(email, generatedOtp, name, eventName);
+
+  // The OTP itself must never reach the browser in production — anyone could read it
+  // from this response and verify as someone else. Kept only for local development.
+  const isProduction = process.env.NODE_ENV === "production";
+
+  if (!sent) {
+    return {
+      success: false,
+      message: error || "Could not send the email OTP. Please try again.",
+      msg: error || "Could not send the email OTP. Please try again.",
+      otpRecordId: otpRecord._id,
+      ...(isProduction ? {} : { otp: generatedOtp }),
+    };
+  }
+
   return {
     success: true,
-    message: "OTP sent successfully to email.",
-    msg: "OTP sent successfully to email.",
+    message: "OTP sent successfully to your email address.",
+    msg: "OTP sent successfully to your email address.",
     otpRecordId: otpRecord._id,
+    ...(isProduction ? {} : { otp: generatedOtp }),
   };
 };
 

@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import mongoose from "mongoose";
 import UdyamVerification from "../../models/msme/UdyamVerification.model";
 import { uploadUdyamCertificateToCloudinary } from "../../services/cloudinary.service";
 import { runUdyamExtractionPipeline } from "../../services/ai/udyamExtraction.service";
@@ -71,6 +72,12 @@ export const analyzeUdyamCertificate = async (req: Request, res: Response): Prom
           mobile: null,
           email: null,
           nicCode: null,
+          gstin: null,
+          pan: null,
+          constitution: null,
+          bankName: null,
+          bankIfsc: null,
+          bankAccountNumber: null,
         },
         error: (extractErr as Error).message,
       });
@@ -93,6 +100,45 @@ export const analyzeUdyamCertificate = async (req: Request, res: Response): Prom
       success: false,
       message: "Could not process the certificate. Please try again.",
       error: (error as Error).message,
+    });
+  }
+};
+
+/**
+ * Returns a saved certificate reading by id. The apply form pre-fills from this rather
+ * than from anything the browser kept, so the stored reading stays the single source of
+ * truth — a copy in localStorage can be stale, hand-edited, or missing entirely after a
+ * device switch, and the form locks these fields against editing on the strength of it.
+ */
+export const getUdyamVerification = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      res.status(400).json({ success: false, message: "Invalid verification id." });
+      return;
+    }
+
+    const record = await UdyamVerification.findById(id).lean();
+    if (!record) {
+      res.status(404).json({ success: false, message: "Certificate reading not found." });
+      return;
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        verificationId: record._id,
+        status: record.status,
+        provider: record.provider,
+        extractedData: record.extractedData,
+      },
+    });
+  } catch (error) {
+    console.error("Get Udyam verification error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Could not load the certificate reading. Please try again.",
     });
   }
 };

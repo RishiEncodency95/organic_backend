@@ -25,6 +25,12 @@ export interface IUdyamVerification extends Document {
     mobile: string | null;
     email: string | null;
     nicCode: string | null;
+    gstin: string | null;
+    pan: string | null;
+    constitution: string | null;
+    bankName: string | null;
+    bankIfsc: string | null;
+    bankAccountNumber: string | null;
   };
   error?: string;
   createdAt: Date;
