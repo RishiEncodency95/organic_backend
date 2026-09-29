@@ -72,18 +72,25 @@ class CloudinaryStorage implements multer.StorageEngine {
  * parameter for call-site compatibility but no longer used for a local
  * filename, since Cloudinary generates its own asset id.
  */
-export const createUploader = (_prefix = "upload", folder = "organic_expo") => {
+export const createUploader = (
+  _prefix = "upload",
+  folder = "organic_expo",
+  options: Pick<multer.Options, "fileFilter" | "limits"> = {}
+) => {
   return multer({
     storage: new CloudinaryStorage(`bharat-organic/${folder}`),
     limits: {
       fileSize: 10 * 1024 * 1024, // 10MB default limit
+      ...options.limits,
     },
-    fileFilter: (_req, file, cb) => {
-      // Allow common image/media formats; permissive fallback matches the
-      // previous behavior so existing upload flows don't start rejecting
-      // files they used to accept.
-      cb(null, true);
-    },
+    fileFilter:
+      options.fileFilter ??
+      ((_req, file, cb) => {
+        // Allow common image/media formats; permissive fallback matches the
+        // previous behavior so existing upload flows don't start rejecting
+        // files they used to accept.
+        cb(null, true);
+      }),
   });
 };
 
