@@ -2,6 +2,7 @@ import AwardsNomination from "../../../../models/awards/awardsNomination.model";
 import Otp from "../../../../models/contact/otp.model";
 import { ApiError } from "../../../../utils/ApiError";
 import { env } from "../../../../config/env";
+import { resolveDropdownValues } from "../../../dropdowns/dropdownValue";
 
 const MOBILE_RE = /^[6-9]\d{9}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -89,6 +90,18 @@ export const createNominationService = async (payload: any, files?: any) => {
 
   const errors = validateNomination(nominationData);
   if (errors.length) throw new ApiError(400, errors[0], errors);
+
+  // Dropdown answers must be options the admin currently offers (stored in their canonical form).
+  Object.assign(
+    nominationData,
+    await resolveDropdownValues(nominationData, {
+      applicantType: { list: "awards-applicant-type", label: "Applicant type", required: true },
+      stateCountry: { list: "awards-state-country", label: "State / country", required: true },
+      awardCategory: { list: "awards-category", label: "Award category", required: true },
+      yearsExperience: { list: "awards-years-experience", label: "Years of experience", required: true },
+      teamSize: { list: "awards-team-size", label: "Team size" },
+    })
+  );
 
   await assertContactsVerified(nominationData.mobile, nominationData.email);
   nominationData.mobileVerified = true;
