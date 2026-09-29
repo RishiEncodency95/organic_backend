@@ -2,6 +2,7 @@ import PartnershipEnquiry from "../../../models/contact/partnershipEnquiry.model
 import Otp from "../../../models/contact/otp.model";
 import { env } from "../../../config/env";
 import { ApiError } from "../../../utils/ApiError";
+import { resolveDropdownValue } from "../../dropdowns/dropdownValue";
 
 export const PARTNERSHIP_OTP_PROFILE = "PARTNERSHIP_ENQUIRY";
 
@@ -23,11 +24,16 @@ export const createPartnershipEnquiryService = async (payload: any) => {
   const organization = String(payload?.organization || "").trim();
   const email = String(payload?.email || "").trim();
   const phone = String(payload?.phone || "").trim();
-  const category = String(payload?.category || "").trim();
+  const rawCategory = String(payload?.category || "").trim();
 
-  if (!name || !organization || !email || !phone || !category) {
+  if (!name || !organization || !email || !phone || !rawCategory) {
     throw ApiError.badRequest("Full name, organization, email, mobile number and partnership category are required.");
   }
+
+  const category = await resolveDropdownValue("partnership-category", rawCategory, {
+    field: "Partnership category",
+    required: true,
+  });
 
   await consumeVerifiedPhone(phone);
 

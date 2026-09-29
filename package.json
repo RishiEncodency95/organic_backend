@@ -9,8 +9,11 @@
     "start": "node dist/server.js",
     "seed:admin": "tsx scripts/seed_superadmin.ts",
     "seed:career-options": "tsx scripts/seed_career_options.ts",
+    "seed:dropdowns": "tsx scripts/seed_dropdowns.ts",
+    "seed:expo-event": "tsx scripts/seed_expo_event.ts",
     "seed:credentials": "tsx scripts/seed_credentials.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:dropdowns": "tsx scripts/test_dropdowns_api.ts"
   },
   "repository": {
     "type": "git",
@@ -30,6 +33,7 @@
     "cloudinary": "^2.11.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
+    "country-state-city": "^3.2.1",
     "docx": "^9.7.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
