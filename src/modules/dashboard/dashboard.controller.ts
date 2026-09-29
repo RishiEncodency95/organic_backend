@@ -102,11 +102,6 @@ export const dashboardController = {
                 { city: "Dubai (UAE)", count: 28 },
                 { city: "Singapore", count: 18 },
               ],
-              donations: { total: 36, mtd: 12, totalAmount: 450000 },
-              volunteers: { total: 48, active: 42 },
-              cases: { total: 125, open: 18 },
-              newsletter: { total: 342, mtd: 45 },
-              campaigns: { total: 8, active: 4 },
               actionRequired: {
                 exhibitor: exhibitorCount > 0 ? exhibitorCount : 3, // Fallbacks so they don't appear 0 if DB is empty
                 buyer: buyerCount > 0 ? buyerCount : 12,
