@@ -16,6 +16,13 @@ import {
   getAdminApplicationById,
   updateAdminApplicationStatus,
 } from "../modules/careers/applications.controller";
+import {
+  getCareerOptions,
+  getAdminCareerOptions,
+  createCareerOption,
+  updateCareerOption,
+  deleteCareerOption,
+} from "../modules/careers/options.controller";
 import { uploadCvMiddleware } from "../middlewares/uploadCv.middleware";
 import { uploadPhotoMiddleware } from "../middlewares/uploadPhoto.middleware";
 import { protect } from "../middlewares/auth.middleware";
@@ -34,6 +41,8 @@ router.get("/analysis/:id", getAnalysisResult);
 router.patch("/candidates/:id", updateCandidateProfile);
 router.post("/candidates/:id/photo", uploadPhotoMiddleware.any(), uploadCandidatePhoto);
 
+router.get("/options", getCareerOptions);
+
 router.post("/applications", createApplication);
 router.get("/applications/:id", getApplication);
 router.patch("/applications/:id", updateApplication);
@@ -47,6 +56,11 @@ router.post("/admin/jobs/generate-description", protect, generateJobDescription)
 router.post("/admin/jobs", protect, createAdminJob);
 router.patch("/admin/jobs/:id", protect, updateAdminJob);
 router.delete("/admin/jobs/:id", protect, deleteAdminJob);
+
+router.get("/admin/options", protect, getAdminCareerOptions);
+router.post("/admin/options", protect, createCareerOption);
+router.patch("/admin/options/:id", protect, updateCareerOption);
+router.delete("/admin/options/:id", protect, deleteCareerOption);
 
 router.get("/admin/applications", protect, getAdminApplications);
 router.get("/admin/applications/:id", protect, getAdminApplicationById);
