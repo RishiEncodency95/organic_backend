@@ -3,6 +3,7 @@ import crypto from "crypto";
 import MsmeApplication from "../../models/msme/MsmeApplication.model";
 import Counter from "../../models/careers/Counter.model";
 import { env } from "../../config/env";
+import DropdownOption from "../../models/dropdown/DropdownOption.model";
 import { sendMsmeCandidateConfirmationEmail, sendMsmeAdminNotificationEmail } from "../../services/msmeEmail.service";
 
 const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
@@ -10,12 +11,20 @@ const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
 // Pricing lives on the server so the amount charged can never be chosen by the browser.
 const STALL_RATE = 11000;
 const GST_RATE = 0.18;
-const STALL_SIZES = [9, 12, 15, 18];
+// Used only if the admin's "Stall Size" list (Dropdown Manager) has no numeric options.
+const DEFAULT_STALL_SIZES = [9, 12, 15, 18];
+
+/** Stall sizes on offer: the active numeric values of the admin-managed "msme-stall-size" list. */
+const offeredStallSizes = async (): Promise<number[]> => {
+  const options = await DropdownOption.find({ list: "msme-stall-size", isActive: true }).select("value").lean();
+  const sizes = (options as any[]).map((o) => Number(o.value)).filter((n) => Number.isFinite(n) && n > 0);
+  return sizes.length ? sizes : DEFAULT_STALL_SIZES;
+};
 
 /** Total payable (₹, inclusive of GST) for a stall size, or null if the size isn't one we offer. */
-const stallAmount = (stallSize: unknown): number | null => {
+const stallAmount = async (stallSize: unknown): Promise<number | null> => {
   const size = Number(stallSize);
-  if (!STALL_SIZES.includes(size)) return null;
+  if (!(await offeredStallSizes()).includes(size)) return null;
   return Math.round(size * STALL_RATE * (1 + GST_RATE));
 };
 
@@ -111,8 +120,9 @@ export const saveParticipationDetails = async (req: Request, res: Response): Pro
       return;
     }
 
-    if (participation.stallSize !== undefined && stallAmount(participation.stallSize) === null) {
-      res.status(400).json({ success: false, message: `Stall size must be one of ${STALL_SIZES.join(", ")} sqm.` });
+    if (participation.stallSize !== undefined && (await stallAmount(participation.stallSize)) === null) {
+      const sizes = await offeredStallSizes();
+      res.status(400).json({ success: false, message: `Stall size must be one of ${sizes.join(", ")} sqm.` });
       return;
     }
 
@@ -157,7 +167,7 @@ export const recordPaymentOrder = async (req: Request, res: Response): Promise<v
     }
 
     // Any amount the client sends is ignored — it is derived from the saved stall size.
-    const amount = stallAmount(application.participation?.stallSize);
+    const amount = await stallAmount(application.participation?.stallSize);
     if (amount === null) {
       res.status(400).json({ success: false, message: "Please complete Step 2 (Participation Details) before paying." });
       return;
