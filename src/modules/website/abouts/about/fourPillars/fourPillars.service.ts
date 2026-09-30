@@ -19,6 +19,10 @@ export const updateFourPillarsService = async (payload: any, files?: any) => {
     }
   }
 
+  if (typeof updateData.enabled === "string") {
+    updateData.enabled = updateData.enabled === "true";
+  }
+
   if (files && Array.isArray(files)) {
     files.forEach((file: any) => {
       const match = file.fieldname.match(/^pillar_image_(\d+)$/);

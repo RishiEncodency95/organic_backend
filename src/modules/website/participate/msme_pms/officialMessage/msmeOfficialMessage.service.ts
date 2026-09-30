@@ -8,7 +8,33 @@ export const getMsmeOfficialMessageService = async () => {
   return data;
 };
 
+const ALLOWED_FIELDS = [
+  "enabled",
+  "eyebrow",
+  "title",
+  "subtitle",
+  "messageTitle",
+  "quote",
+  "authorName",
+  "authorDesignation",
+  "videoUrl",
+  "thumbnailImage",
+  "thumbnailAlt",
+] as const;
+
 export const updateMsmeOfficialMessageService = async (payload: any) => {
-  const data = await MsmeOfficialMessage.findOneAndUpdate({}, payload, { new: true, upsert: true });
+  const updateData: Record<string, any> = {};
+  for (const field of ALLOWED_FIELDS) {
+    if (payload?.[field] !== undefined) updateData[field] = payload[field];
+  }
+  if (typeof updateData.enabled === "string") {
+    updateData.enabled = updateData.enabled !== "false";
+  }
+
+  const data = await MsmeOfficialMessage.findOneAndUpdate({}, updateData, {
+    new: true,
+    upsert: true,
+    setDefaultsOnInsert: true,
+  });
   return data;
 };

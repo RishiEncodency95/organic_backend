@@ -63,13 +63,13 @@ const whyParticipateSchema = new Schema({
   buttonLabel: { type: String, default: 'BOOK A STALL' },
   buttonHref: { type: String, default: '/registration/book-a-stand' },
   secondaryButtonLabel: { type: String, default: 'Download Brochure' },
-  secondaryButtonHref: { type: String, default: '/download/invited card.pdf' },
+  secondaryButtonHref: { type: String, default: '/boe.pdf' },
   tertiaryButtonLabel: { type: String, default: 'Why Exhibit?' },
   tertiaryButtonHref: { type: String, default: '/why-exhibit' },
   mainPoints: { type: [String], default: ['Exhibit', 'Connect', 'Grow'] },
   buttons: {
     stall: { type: buttonSchema, default: { text: 'BOOK A STALL', link: '/registration/book-a-stand' } },
-    brochure: { type: buttonSchema, default: { text: 'Download Brochure', link: '/download/invited card.pdf' } },
+    brochure: { type: buttonSchema, default: { text: 'Download Brochure', link: '/boe.pdf' } },
     moreInfo: { type: buttonSchema, default: { text: 'Why Exhibit?', link: '/why-exhibit' } }
   }
 }, { timestamps: true });

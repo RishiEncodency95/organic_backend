@@ -32,6 +32,7 @@ const awardsHeroSchema = new Schema(
     venueLine1: { type: String, default: "Hall 12, Bharat Mandapam" },
     venueLine2: { type: String, default: "PRAGATI MAIDAN, NEW DELHI, INDIA" },
     image: { type: String, default: "" },
+    imageAlt: { type: String, default: "Bharat Organic Excellence Awards 2027" },
     buttonLabel: { type: String, default: "NOMINATE NOW" },
     buttonHref: { type: String, default: "/awards/nominations" },
     secondaryButtonLabel: { type: String, default: "VIEW CATEGORIES" },

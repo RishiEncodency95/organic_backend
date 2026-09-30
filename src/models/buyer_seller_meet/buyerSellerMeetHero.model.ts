@@ -2,8 +2,9 @@ import mongoose, { Schema } from "mongoose";
 
 const buyerSellerMeetHeroSchema = new Schema(
   {
-    titleLine1: { type: String, default: "BUYER-SELLER" },
-    titleLine2: { type: String, default: "MEET 2027" },
+    enabled: { type: Boolean, default: true },
+    // Full H1 text; the website puts the first word on line 1 and the rest on line 2.
+    title: { type: String, default: "BUYER-SELLER MEET 2027" },
     subtitle: {
       type: String,
       default:
@@ -15,6 +16,8 @@ const buyerSellerMeetHeroSchema = new Schema(
     buyerButtonHref: { type: String, default: "/registration/buyer-registration" },
     exhibitorButtonLabel: { type: String, default: "PARTICIPATE AS AN EXHIBITOR" },
     exhibitorButtonHref: { type: String, default: "/participate_as_exhibiture" },
+    image: { type: String, default: "" },
+    imageAlt: { type: String, default: "Buyer-Seller Meet at Bharat Organic Expo 2027" },
   },
   { timestamps: true }
 );

@@ -45,6 +45,7 @@ const awardsNominationHeroSchema = new Schema(
       default:
         "",
     },
+    imageAlt: { type: String, default: "Bharat Organic Excellence Awards 2027" },
   },
   { timestamps: true }
 );

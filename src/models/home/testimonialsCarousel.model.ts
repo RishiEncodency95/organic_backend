@@ -8,6 +8,7 @@ const testimonialSchema = new Schema({
   color: { type: String, default: '#1b5e20' },
   logoText: { type: String, default: '' },
   logo: { type: String, default: '' },
+  logoAlt: { type: String, default: '' },
   status: { type: String, default: 'Published' },
   author: { type: String, default: 'Vansh Chaudhary' },
   addedOn: { type: String, default: '' },

@@ -95,7 +95,7 @@ const parseJsonFields = (payload: any, files?: any) => {
   if (updateData.secondaryButtonLabel !== undefined || updateData.secondaryButtonHref !== undefined) {
     updateData.buttons.brochure = {
       text: updateData.secondaryButtonLabel || updateData.buttons?.brochure?.text || "Download Brochure",
-      link: updateData.secondaryButtonHref || updateData.buttons?.brochure?.link || "/download/invited card.pdf",
+      link: updateData.secondaryButtonHref || updateData.buttons?.brochure?.link || "/boe.pdf",
     };
   }
   if (updateData.tertiaryButtonLabel !== undefined || updateData.tertiaryButtonHref !== undefined) {
@@ -149,12 +149,12 @@ export const getWhyParticipateService = async () => {
       buttonLabel: "BOOK A STALL",
       buttonHref: "/registration/book-a-stand",
       secondaryButtonLabel: "Download Brochure",
-      secondaryButtonHref: "/download/invited card.pdf",
+      secondaryButtonHref: "/boe.pdf",
       tertiaryButtonLabel: "Why Exhibit?",
       tertiaryButtonHref: "/why-exhibit",
       buttons: {
         stall: { text: "BOOK A STALL", link: "/registration/book-a-stand" },
-        brochure: { text: "Download Brochure", link: "/download/invited card.pdf" },
+        brochure: { text: "Download Brochure", link: "/boe.pdf" },
         moreInfo: { text: "Why Exhibit?", link: "/why-exhibit" },
       },
     });
@@ -173,7 +173,7 @@ export const getWhyParticipateService = async () => {
     if (!data.buttonLabel) { data.buttonLabel = data.buttons?.stall?.text || "BOOK A STALL"; needsSave = true; }
     if (!data.buttonHref) { data.buttonHref = data.buttons?.stall?.link || "/registration/book-a-stand"; needsSave = true; }
     if (!data.secondaryButtonLabel) { data.secondaryButtonLabel = data.buttons?.brochure?.text || "Download Brochure"; needsSave = true; }
-    if (!data.secondaryButtonHref) { data.secondaryButtonHref = data.buttons?.brochure?.link || "/download/invited card.pdf"; needsSave = true; }
+    if (!data.secondaryButtonHref) { data.secondaryButtonHref = data.buttons?.brochure?.link || "/boe.pdf"; needsSave = true; }
     if (!data.tertiaryButtonLabel) { data.tertiaryButtonLabel = data.buttons?.moreInfo?.text || "Why Exhibit?"; needsSave = true; }
     if (!data.tertiaryButtonHref) { data.tertiaryButtonHref = data.buttons?.moreInfo?.link || "/why-exhibit"; needsSave = true; }
     if (!data.points || data.points.length === 0) {

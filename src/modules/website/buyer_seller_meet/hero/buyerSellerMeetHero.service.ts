@@ -33,9 +33,37 @@ export const getBuyerSellerMeetHeroService = async () => {
   return data;
 };
 
+const HERO_FIELDS = [
+  "enabled",
+  "title",
+  "subtitle",
+  "dates",
+  "venue",
+  "buyerButtonLabel",
+  "buyerButtonHref",
+  "exhibitorButtonLabel",
+  "exhibitorButtonHref",
+  "image",
+  "imageAlt",
+] as const;
+
+// Plain field copy (no JSON.parse) so text like "2027" is not turned into a number.
 export const updateBuyerSellerMeetHeroService = async (payload: any, files?: any) => {
-  const updateData = parseJsonFields(payload, files);
-  const data = await BuyerSellerMeetHero.findOneAndUpdate({}, updateData, { new: true, upsert: true });
+  const updateData: Record<string, any> = {};
+  for (const field of HERO_FIELDS) {
+    if (payload?.[field] !== undefined) updateData[field] = payload[field];
+  }
+  if (typeof updateData.enabled === "string") {
+    updateData.enabled = updateData.enabled !== "false";
+  }
+  if (files?.image?.[0]) {
+    updateData.image = `${files.image[0].filename}`;
+  }
+  const data = await BuyerSellerMeetHero.findOneAndUpdate({}, updateData, {
+    new: true,
+    upsert: true,
+    setDefaultsOnInsert: true,
+  });
   return data;
 };
 

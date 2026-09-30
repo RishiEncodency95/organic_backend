@@ -19,6 +19,7 @@ import websiteBuyerSellerMeetRouter from "../modules/website/websiteBuyerSellerM
 import websiteOpportunitiesRouter from "../modules/website/websiteOpportunities.routes";
 import websiteGalleryRouter from "../modules/website/gallery/gallery.routes";
 import websiteAwardsRouter from "../modules/website/websiteAwards.routes";
+import websiteRegistrationRouter from "../modules/website/websiteRegistration.routes";
 import contactEnquiryRouter from "../modules/website/contact/contactEnquiry.routes";
 import verifyRouter from "../modules/website/contact/verify.routes";
 import partnershipEnquiryRouter from "../modules/website/contact/partnershipEnquiry.routes";
@@ -68,6 +69,7 @@ router.use("/website", websiteMsmePmsRouter);
 router.use("/website", websiteBuyerSellerMeetRouter);
 router.use("/website", websiteOpportunitiesRouter);
 router.use("/website", websiteAwardsRouter);
+router.use("/website", websiteRegistrationRouter);
 router.use("/website/gallery", websiteGalleryRouter);
 router.use("/gallery", websiteGalleryRouter);
 router.use("/contact-enquiry", contactEnquiryRouter);

@@ -20,10 +20,14 @@ export const twoFALimiter = rateLimit({
 });
 
 // General API limiter
+// Skipped outside production: locally the admin, the website's server rendering and the
+// browser all call the API from the same localhost IP, so one CMS save (plus the page
+// loads around it) blows through 100/min and fails with 429.
 export const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
   max: 100,
   message: new ApiError(429, "Too many requests. Slow down."),
   standardHeaders: true,
   legacyHeaders: false,
+  skip: () => process.env.NODE_ENV !== "production",
 });
