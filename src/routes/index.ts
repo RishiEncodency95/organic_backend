@@ -27,6 +27,11 @@ import blogPostRouter from "../modules/blogPost/blogPost.routes";
 import careersRouter from "./careers.routes";
 import msmeRouter from "./msme.routes";
 import dashboardRouter from "../modules/dashboard/dashboard.routes";
+import dropdownsRouter from "../modules/dropdowns/dropdowns.routes";
+import locationsRouter from "../modules/locations/locations.routes";
+import publicStaffRouter from "../modules/staff/publicStaff.routes";
+import expoRouter from "../modules/expo/expo.routes";
+import buyerConfigRouter from "../modules/dropdowns/buyerConfig.routes";
 import systemServicesRouter from "../modules/systemServices/systemServices.routes";
 
 const router = Router();
@@ -43,6 +48,11 @@ router.get("/health", (req, res) => {
 // API Routes
 router.use("/system-services", systemServicesRouter);
 router.use("/dashboard", dashboardRouter);
+router.use("/dropdowns", dropdownsRouter);
+router.use("/", locationsRouter);
+router.use("/public", publicStaffRouter);
+router.use("/", expoRouter);
+router.use("/", buyerConfigRouter);
 router.use("/careers", careersRouter);
 router.use("/admin/careers", careersRouter);
 router.use("/msme", msmeRouter);
