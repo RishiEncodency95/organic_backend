@@ -23,6 +23,8 @@ router.post("/meta", galleryController.saveMeta);
 router.get("/items", galleryController.getItems);
 router.post("/items", galleryController.createItem);
 router.post("/items/bulk-delete", galleryController.bulkDeleteItems);
+// Must stay above "/items/:id", otherwise "reorder" would be captured as an item id.
+router.put("/items/reorder", galleryController.reorderItems);
 router.put("/items/:id", galleryController.updateItem);
 router.patch("/items/:id/status", galleryController.updateStatus);
 router.delete("/items/:id", galleryController.deleteItem);

@@ -122,6 +122,39 @@ export const bulkDeleteItems = async (req: Request, res: Response) => {
   }
 };
 
+export const reorderItems = async (req: Request, res: Response) => {
+  try {
+    const items = req.body?.items;
+    const valid =
+      Array.isArray(items) &&
+      items.length > 0 &&
+      items.every(
+        (x: any) =>
+          x &&
+          typeof x.id === "string" &&
+          mongoose.isValidObjectId(x.id) &&
+          typeof x.order === "number" &&
+          Number.isFinite(x.order)
+      );
+    if (!valid) {
+      return res.status(400).json({
+        status: "fail",
+        message: "Provide a non-empty array of { id, order } in `items`.",
+      });
+    }
+    const modifiedCount = await galleryService.reorderGalleryItems(items);
+    return res.status(200).json({
+      status: "success",
+      modifiedCount,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      status: "error",
+      message: error.message || "Failed to reorder gallery items",
+    });
+  }
+};
+
 export const getMeta = async (req: Request, res: Response) => {
   try {
     const meta = await galleryService.getGalleryMeta();

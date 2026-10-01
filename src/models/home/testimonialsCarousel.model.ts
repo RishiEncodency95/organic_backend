@@ -5,6 +5,7 @@ const testimonialSchema = new Schema({
   company2: { type: String, default: '' },
   location: { type: String, default: '' },
   quote: { type: String, default: '' },
+  rating: { type: Number, default: 5 },
   color: { type: String, default: '#1b5e20' },
   logoText: { type: String, default: '' },
   logo: { type: String, default: '' },

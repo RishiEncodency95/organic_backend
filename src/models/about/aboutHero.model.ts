@@ -2,6 +2,9 @@ import mongoose, { Schema } from "mongoose";
 
 const aboutHeroSchema = new Schema({
     tagline: { type: String, default: '' },
+    // The About page H1. Replaces titlePart1 + titlePart2, which are kept only so older
+    // saves can still be read (joined) until the admin saves the page again.
+    title: { type: String, default: '' },
     titlePart1: { type: String, default: '' },
     titlePart2: { type: String, default: '' },
     subtitle: { type: String, default: '' },

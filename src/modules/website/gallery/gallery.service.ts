@@ -173,10 +173,24 @@ export const createGalleryItem = async (data: any) => {
 };
 
 export const updateGalleryItem = async (id: string, data: any) => {
-  if (!data.title || data.title.trim() === "") {
+  // Only default the title when the request actually sends one. Partial updates (image
+  // replace, crop, order swap) don't include it, and must not reset it to "Photo Asset".
+  if ("title" in data && (!data.title || String(data.title).trim() === "")) {
     data.title = data.category || "Photo Asset";
   }
   return GalleryItem.findByIdAndUpdate(id, { $set: data }, { new: true });
+};
+
+// Writes several `order` values in one round trip, so a layout swap (or the renumbering
+// that fixes duplicate orders) lands atomically instead of as a burst of separate PUTs.
+export const reorderGalleryItems = async (items: { id: string; order: number }[]) => {
+  if (items.length === 0) return 0;
+  const result = await GalleryItem.bulkWrite(
+    items.map(({ id, order }) => ({
+      updateOne: { filter: { _id: id }, update: { $set: { order } } },
+    }))
+  );
+  return result.modifiedCount ?? 0;
 };
 
 export const updateGalleryItemStatus = async (id: string, status: "Published" | "Draft") => {
