@@ -19,7 +19,11 @@ const envSchema = z.object({
 
   // AI Keys
   OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().default("gpt-5.4-mini"),
   GEMINI_API_KEY: z.string().optional(),
+
+  // Website chatbot: comma-separated origins allowed to call /api/chat (empty = any)
+  ALLOWED_ORIGINS: z.string().default(""),
 
   // Cloudinary
   CLOUDINARY_CLOUD_NAME: z.string().optional(),

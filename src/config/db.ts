@@ -1,6 +1,14 @@
+import dns from "dns";
 import mongoose from "mongoose";
 import { env } from "./env";
 import { logger } from "../utils/logger";
+
+// Some Windows setups leave Node's resolver pointing at 127.0.0.1, which breaks
+// the SRV lookup for mongodb+srv:// URIs (querySrv ECONNREFUSED). Fall back to public DNS.
+const servers = dns.getServers();
+if (servers.length === 1 && servers[0] === "127.0.0.1") {
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+}
 
 let isConnected = false;
 

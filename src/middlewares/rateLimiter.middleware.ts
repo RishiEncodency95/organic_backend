@@ -19,6 +19,24 @@ export const twoFALimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Website chatbot — every message costs OpenAI tokens, so this also runs in development
+export const chatLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 15,
+  message: new ApiError(429, "Too many messages. Please wait a minute and try again."),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Chatbot details form — each submit can send WhatsApp messages
+export const chatLeadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  message: new ApiError(429, "Too many attempts. Please try again later."),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // General API limiter
 // Skipped outside production: locally the admin, the website's server rendering and the
 // browser all call the API from the same localhost IP, so one CMS save (plus the page
