@@ -14,7 +14,22 @@ import { generateSitemapXml } from "./modules/seo/sitemap.controller";
 
 const app = express();
 
+// Behind Nginx in production — use the visitor's IP (X-Forwarded-For) for rate limiting
+app.set("trust proxy", 1);
+
 // ─── Security Middlewares ─────────────────────────────────────────────────────
+
+// The chatbot spends OpenAI credits, so only the website's own origins may call it from a
+// browser. Every other route keeps the open CORS policy below.
+const chatOrigins = env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean);
+app.use(["/api/chat", "/api/v1/chat"], (req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && chatOrigins.length > 0 && !chatOrigins.includes(origin)) {
+    res.status(403).json({ success: false, message: "Origin not allowed" });
+    return;
+  }
+  next();
+});
 
 // Secure HTTP headers
 app.use(
