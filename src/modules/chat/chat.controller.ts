@@ -10,9 +10,13 @@ import { logger } from "../../utils/logger";
 import { env } from "../../config/env";
 import { sendWhatsAppTemplate } from "../../services/whatsapp.service";
 import { buildInstructions, FALLBACK_REPLY } from "./chat.prompt";
+import { toTenDigitMobile } from "./chat.schema";
 
 const HISTORY_LIMIT = 10;
 const WHATSAPP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const DUPLICATE_ENQUIRY_MS = 24 * 60 * 60 * 1000;
+const CHATBOT_SERVICE = "Chatbot (Organic Mitra)";
+const NO_QUESTION_PREFIX = "Started a chat with Organic Mitra on";
 
 let openai: OpenAI | null = null;
 const getOpenAI = (): OpenAI | null => {
@@ -22,16 +26,11 @@ const getOpenAI = (): OpenAI | null => {
 };
 
 /** Digits only; a leading 91 on a 12-digit Indian number is dropped so duplicates match. */
-const normalizePhone = (phone: string): string => {
-  const digits = phone.replace(/\D/g, "");
-  return digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits;
-};
-
 /**
  * Thank-you WhatsApp to the visitor plus an enquiry copy to the admin number.
  * At most once per phone number per 24 hours, so the form can't be used to spam someone.
  */
-const notifyOnWhatsApp = async (sessionId: string, lead: { name: string; email: string; phone: string }, pageUrl: string) => {
+const notifyOnWhatsApp = async (sessionId: string, lead: { name: string; phone: string }, pageUrl: string) => {
   const recentlySent = await Chat.exists({
     "lead.phone": lead.phone,
     whatsappSentAt: { $gte: new Date(Date.now() - WHATSAPP_COOLDOWN_MS) },
@@ -57,7 +56,7 @@ const notifyOnWhatsApp = async (sessionId: string, lead: { name: string; email: 
           campaignName: adminCampaign,
           phone: adminNumber,
           userName: "Admin",
-          templateParams: [lead.name, lead.phone, lead.email, pageUrl || "Website"],
+          templateParams: [lead.name, lead.phone, pageUrl || "Website"],
           source: "website-chatbot-admin",
         })
       : Promise.resolve(false),
@@ -73,21 +72,32 @@ export const startChat = asyncHandler(async (req: Request, res: Response) => {
   const sessionId = String(req.body.sessionId).trim();
   const pageUrl = String(req.body.pageUrl || "").slice(0, 500);
   const lead = {
-    name: String(req.body.name).trim(),
-    email: String(req.body.email).trim().toLowerCase(),
-    phone: normalizePhone(String(req.body.phone)),
+    name: String(req.body.name).trim().replace(/\s+/g, " "),
+    phone: toTenDigitMobile(String(req.body.phone)),
   };
 
   const existing = await Chat.findOne({ sessionId }).select("enquiryId").lean();
 
-  // Shows up in the admin panel's Contact Enquiries list
+  // Shows up in the admin panel's Contact Enquiries list. The same phone number within
+  // 24 hours (e.g. a new chat after the old one expired) reuses its enquiry instead of a duplicate.
   let enquiryId = existing?.enquiryId;
+  if (!enquiryId) {
+    const recent = await ContactEnquiry.findOne({
+      phone: lead.phone,
+      service: CHATBOT_SERVICE,
+      createdAt: { $gte: new Date(Date.now() - DUPLICATE_ENQUIRY_MS) },
+    })
+      .sort({ createdAt: -1 })
+      .select("_id")
+      .lean();
+    enquiryId = recent?._id;
+  }
   if (!enquiryId) {
     const enquiry = await ContactEnquiry.create({
       ...lead,
       subject: "Chatbot enquiry",
-      service: "Chatbot (Organic Mitra)",
-      message: `Started a chat with Organic Mitra on ${pageUrl || "the website"}.`,
+      service: CHATBOT_SERVICE,
+      message: `${NO_QUESTION_PREFIX} ${pageUrl || "the website"}.`,
     });
     enquiryId = enquiry._id;
   }
@@ -115,7 +125,7 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
     .select({ lead: 1, enquiryId: 1, messages: { $slice: -HISTORY_LIMIT } })
     .lean();
   if (!chat?.lead?.name) {
-    throw ApiError.badRequest("Please share your name, email and phone number first.");
+    throw ApiError.badRequest("Please share your name and mobile number first.");
   }
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -190,9 +200,10 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
       { upsert: true }
     );
     // Put the visitor's first question on their enquiry so the team sees what they asked
+    // (only while it still has no question — a reused enquiry keeps the earlier one)
     if (chat.enquiryId && (chat.messages || []).length === 0) {
       await ContactEnquiry.updateOne(
-        { _id: chat.enquiryId },
+        { _id: chat.enquiryId, message: { $regex: `^${NO_QUESTION_PREFIX}` } },
         { $set: { message: `Chatbot question: ${message}` } }
       );
     }
