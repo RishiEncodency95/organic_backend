@@ -51,29 +51,51 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
     );
   }
 
+  // PDFs go up as "raw" files (chunked, so size isn't limited by single-request caps).
+  // Cloudinary answers public PDF URLs with 401 unless "Allow delivery of PDF and ZIP
+  // files" is enabled on the account — which is why brochures broke live — so the URL
+  // handed back is our own /api/files/pdf proxy (modules/files) rather than the CDN URL.
+  // Raw public_ids only carry an extension when given one, so ".pdf" is added explicitly.
+  const isPdf = file.mimetype === "application/pdf" || /\.pdf$/i.test(file.originalname || "");
+  const pdfBaseName =
+    (file.originalname || "document")
+      .replace(/\.pdf$/i, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 60) || "document";
+
   try {
     const result = await new Promise<{ secure_url: string; public_id: string }>((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder,
-          resource_type: "auto",
-        },
-        (error, result) => {
-          if (error || !result) {
-            return reject(error || new Error("Cloudinary upload failed"));
-          }
-          resolve({
-            secure_url: result.secure_url,
-            public_id: result.public_id,
-          });
+      const callback = (error: any, result: any) => {
+        if (error || !result) {
+          return reject(error || new Error("Cloudinary upload failed"));
         }
-      );
+        resolve({
+          secure_url: result.secure_url,
+          public_id: result.public_id,
+        });
+      };
+
+      const uploadStream = isPdf
+        ? // Chunked so large brochures go through (single requests are capped at 100MB).
+          cloudinary.uploader.upload_chunked_stream(
+            {
+              folder,
+              resource_type: "raw",
+              public_id: `${pdfBaseName}-${Date.now()}.pdf`,
+              chunk_size: 20 * 1024 * 1024,
+            },
+            callback
+          )
+        : cloudinary.uploader.upload_stream({ folder, resource_type: "auto" }, callback);
       uploadStream.end(file.buffer);
     });
 
     res.status(200).json(
       new ApiResponse(200, "File uploaded to Cloudinary successfully", {
-        url: result.secure_url,
+        // Relative on purpose: the website and admin both forward /api to this server.
+        url: isPdf ? `/api/files/pdf?url=${encodeURIComponent(result.secure_url)}` : result.secure_url,
         publicId: result.public_id,
       })
     );

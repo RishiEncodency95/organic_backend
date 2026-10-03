@@ -6,6 +6,7 @@ import AdvisoryBoardGridMemberRoutes from './abouts/advisory_board_member/adviso
 import AdvisoryPartnerRoutes from './abouts/advisory_board_member/advisoryPartner/advisoryPartner.routes';
 import NominateBannerRoutes from './abouts/advisory_board_member/nominateBanner/nominateBanner.routes';
 import WhyJoinAdvisoryRoutes from './abouts/advisory_board_member/whyJoinAdvisory/whyJoinAdvisory.routes';
+import NominateHeroRoutes from './abouts/advisory_board_member/nominateHero/nominateHero.routes';
 
 const router = express.Router();
 
@@ -16,5 +17,7 @@ router.use('/advisoryboardgridmember', AdvisoryBoardGridMemberRoutes);
 router.use('/advisorypartner', AdvisoryPartnerRoutes);
 router.use('/nominatebanner', NominateBannerRoutes);
 router.use('/whyjoinadvisory', WhyJoinAdvisoryRoutes);
+// Hero of /about/nominate_advisory_board
+router.use('/nominatehero', NominateHeroRoutes);
 
 export default router;

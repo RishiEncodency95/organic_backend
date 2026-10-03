@@ -5,12 +5,9 @@ import { uploadFile } from "./upload.controller";
 const router = Router();
 
 const storage = multer.memoryStorage();
-const upload = multer({
-  storage,
-  limits: {
-    fileSize: 20 * 1024 * 1024, // 20MB limit
-  },
-});
+// No file-size cap here: brochures/PDFs of any size must go through. Images are still
+// limited separately by the "max image upload size" setting in upload.controller.ts.
+const upload = multer({ storage });
 
 // Single file upload accepts "file" or "image" field name
 router.post("/", upload.single("file"), uploadFile);

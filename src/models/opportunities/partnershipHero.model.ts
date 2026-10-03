@@ -12,6 +12,9 @@ const statItemSchema = new Schema(
 const partnershipHeroSchema = new Schema(
   {
     badgeText: { type: String, default: "PARTNERSHIP / COLLABORATION" },
+    // The page H1. Replaces titleLine1-3, which are kept only so older saves can still be
+    // read (joined) until the admin saves the page again.
+    title: { type: String, default: "Let's Grow Organic. Together." },
     titleLine1: { type: String, default: "Let's Grow" },
     titleLine2: { type: String, default: "Organic." },
     titleLine3: { type: String, default: "Together." },
@@ -32,6 +35,8 @@ const partnershipHeroSchema = new Schema(
         { iconKey: "Briefcase", value: "B2B", label: "MEETINGS" },
       ],
     },
+    image: { type: String, default: "https://res.cloudinary.com/ldlcnnhz/image/upload/v1791016243/bharat-organic/partnership/hero-bg.webp" }, // background image
+    imageAlt: { type: String, default: "Partnership and collaboration at Bharat Organic Expo 2027" },
   },
   { timestamps: true }
 );

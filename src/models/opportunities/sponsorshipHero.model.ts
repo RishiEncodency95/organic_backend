@@ -29,6 +29,9 @@ const sponsorshipHeroSchema = new Schema(
         { iconKey: "Handshake", number: "UNLIMITED", label: "BUSINESS\nOPPORTUNITIES" },
       ],
     },
+    // Background image. Was missing from the schema, so admin uploads never saved.
+    image: { type: String, default: "https://res.cloudinary.com/ldlcnnhz/image/upload/v1791012539/bharat-organic/sponsorship/hero-bg.webp" },
+    imageAlt: { type: String, default: "Sponsorship opportunities at Bharat Organic Expo 2027" },
   },
   { timestamps: true }
 );

@@ -29,6 +29,8 @@ const epromotionHeroSchema = new Schema(
         { iconKey: "Handshake", number: "UNLIMITED", label: "BUSINESS\nOPPORTUNITIES" },
       ],
     },
+    image: { type: String, default: "https://res.cloudinary.com/ldlcnnhz/image/upload/v1791015124/bharat-organic/e-promotion/hero-bg.webp" }, // background image
+    imageAlt: { type: String, default: "E-Promotion opportunities at Bharat Organic Expo 2027" },
   },
   { timestamps: true }
 );
