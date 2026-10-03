@@ -25,6 +25,16 @@ export interface IApplication extends Document {
   whyInterested?: string;
   notes?: string;
   submittedAt?: Date;
+  hrStatus?: string;
+  hrUpdatedAt?: Date;
+  hrUpdatedBy?: string;
+  hrForward?: {
+    recipients: string[];
+    share: string[];
+    note?: string;
+    forwardedAt?: Date;
+    forwardedBy?: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -59,6 +69,32 @@ const ApplicationSchema: Schema = new Schema(
     whyInterested: { type: String },
     notes: { type: String },
     submittedAt: { type: Date },
+    // HR pipeline set from the admin "Applications & AI Response" screen. Kept separate from
+    // `status` (the candidate's own progress) so forwarding/holding never rewrites it.
+    hrStatus: {
+      type: String,
+      enum: [
+        "Not Forwarded",
+        "Sent to HR",
+        "Under Review",
+        "Shortlisted",
+        "Interview",
+        "Selected",
+        "On Hold",
+        "Rejected",
+      ],
+      default: "Not Forwarded",
+    },
+    hrUpdatedAt: { type: Date },
+    hrUpdatedBy: { type: String },
+    // Latest "Forward to HR": who it went to and which parts of the application were shared.
+    hrForward: {
+      recipients: [{ type: String }],
+      share: [{ type: String }],
+      note: { type: String },
+      forwardedAt: { type: Date },
+      forwardedBy: { type: String },
+    },
   },
   {
     timestamps: true,

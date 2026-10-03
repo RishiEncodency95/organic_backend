@@ -17,6 +17,11 @@ import {
   updateAdminApplicationStatus,
 } from "../modules/careers/applications.controller";
 import {
+  getAdminApplicationsBoard,
+  updateAdminApplicationHr,
+  addAdminApplicationNote,
+} from "../modules/careers/applicationsBoard.controller";
+import {
   getCareerOptions,
   getAdminCareerOptions,
   createCareerOption,
@@ -63,6 +68,10 @@ router.patch("/admin/options/:id", protect, updateCareerOption);
 router.delete("/admin/options/:id", protect, deleteCareerOption);
 
 router.get("/admin/applications", protect, getAdminApplications);
+// Flat rows for the admin "Applications & AI Response" screen (must stay above /:id).
+router.get("/admin/applications-board", protect, getAdminApplicationsBoard);
+router.patch("/admin/applications/:id/hr", protect, updateAdminApplicationHr);
+router.post("/admin/applications/:id/notes", protect, addAdminApplicationNote);
 router.get("/admin/applications/:id", protect, getAdminApplicationById);
 router.patch("/admin/applications/:id/status", protect, updateAdminApplicationStatus);
 
