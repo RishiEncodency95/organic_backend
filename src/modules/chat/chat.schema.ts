@@ -27,7 +27,27 @@ export const chatLeadSchema = z.object({
       .string()
       .trim()
       .refine((v) => /^[6-9]\d{9}$/.test(toTenDigitMobile(v)), "Enter a valid 10-digit mobile number"),
+    // Sent by the chat's quotation / callback forms
+    email: z.union([z.literal(""), z.string().trim().email("Enter a valid email address").max(100)]).optional(),
+    enquiryType: z.enum(["stall-quotation", "sales-callback"]).optional(),
+    stallSize: z.string().trim().max(30).optional(),
+    company: z.string().trim().max(100).optional(),
+    preferredTime: z.string().trim().max(60).optional(),
   }),
+});
+
+// Previous chats of a visitor who verified this mobile number / email with OTP
+export const chatHistorySchema = z.object({
+  body: z
+    .object({
+      phone: z
+        .string()
+        .trim()
+        .refine((v) => /^[6-9]\d{9}$/.test(toTenDigitMobile(v)), "Enter a valid 10-digit mobile number")
+        .optional(),
+      email: z.string().trim().toLowerCase().email("Enter a valid email address").max(100).optional(),
+    })
+    .refine((b) => b.phone || b.email, "Mobile number or email is required"),
 });
 
 export const chatMessageSchema = z.object({

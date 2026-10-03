@@ -17,10 +17,26 @@ const chatSchema = new Schema(
     // Details the visitor fills in before the chat starts
     lead: {
       name: { type: String, trim: true },
-      email: { type: String, trim: true, lowercase: true },
+      email: { type: String, trim: true, lowercase: true, index: true },
       phone: { type: String, trim: true, index: true },
     },
     enquiryId: { type: Schema.Types.ObjectId, ref: "OrganicContactEnquiry" },
+    // Quotation / callback requests made from the chat's forms
+    requests: {
+      type: [
+        new Schema(
+          {
+            type: { type: String, enum: ["stall-quotation", "sales-callback"], required: true },
+            stallSize: { type: String, trim: true },
+            company: { type: String, trim: true },
+            preferredTime: { type: String, trim: true },
+            createdAt: { type: Date, default: Date.now },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
     whatsappSentAt: { type: Date },
     messages: { type: [chatMessageSchema], default: [] },
   },

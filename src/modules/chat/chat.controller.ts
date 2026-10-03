@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import OpenAI from "openai";
 import { isValidObjectId } from "mongoose";
 import Chat from "../../models/chat/Chat.model";
+import Otp from "../../models/contact/otp.model";
 import ContactEnquiry from "../../models/contact/contactEnquiry.model";
 import asyncHandler from "../../utils/asyncHandler";
 import { ApiError } from "../../utils/ApiError";
@@ -74,7 +75,16 @@ export const startChat = asyncHandler(async (req: Request, res: Response) => {
   const lead = {
     name: String(req.body.name).trim().replace(/\s+/g, " "),
     phone: toTenDigitMobile(String(req.body.phone)),
+    ...(req.body.email ? { email: String(req.body.email).trim().toLowerCase() } : {}),
   };
+  const request = req.body.enquiryType
+    ? {
+        type: req.body.enquiryType,
+        stallSize: req.body.stallSize || undefined,
+        company: req.body.company || undefined,
+        preferredTime: req.body.preferredTime || undefined,
+      }
+    : null;
 
   const existing = await Chat.findOne({ sessionId }).select("enquiryId").lean();
 
@@ -104,7 +114,7 @@ export const startChat = asyncHandler(async (req: Request, res: Response) => {
 
   await Chat.updateOne(
     { sessionId },
-    { $set: { lead, pageUrl, enquiryId } },
+    { $set: { lead, pageUrl, enquiryId }, ...(request ? { $push: { requests: request } } : {}) },
     { upsert: true }
   );
 
@@ -113,6 +123,45 @@ export const startChat = asyncHandler(async (req: Request, res: Response) => {
   );
 
   res.status(201).json(ApiResponse.created("Chat started", { sessionId }));
+});
+
+export const CHAT_HISTORY_OTP_PROFILE = "CHAT_HISTORY";
+const HISTORY_RESULTS = 5;
+
+// POST /api/chat/history — a returning visitor's previous chats, only after OTP verification
+export const getChatHistory = asyncHandler(async (req: Request, res: Response) => {
+  const phone = req.body.phone ? toTenDigitMobile(String(req.body.phone)) : "";
+  const email = phone ? "" : String(req.body.email || "").trim().toLowerCase();
+
+  // The OTP is verified in the browser; here the server confirms (and consumes) the verified
+  // record so nobody can read someone else's chats by just posting a number. Outside production
+  // the dev master OTP verifies without a record, so the check is skipped there.
+  const proof = await Otp.findOneAndDelete({
+    ...(phone ? { phone } : { email }),
+    isVerified: true,
+    profile: CHAT_HISTORY_OTP_PROFILE,
+  });
+  if (!proof && env.NODE_ENV === "production") {
+    throw ApiError.badRequest("Please verify with OTP to view your previous enquiry.");
+  }
+
+  const chats = await Chat.find(phone ? { "lead.phone": phone } : { "lead.email": email })
+    .sort({ updatedAt: -1 })
+    .limit(HISTORY_RESULTS)
+    .select("lead.name requests messages createdAt updatedAt")
+    .lean();
+
+  // Session ids stay private: they would let anyone continue the chat as this visitor
+  const history = chats.map((chat) => ({
+    name: chat.lead?.name || "",
+    startedAt: chat.createdAt,
+    updatedAt: chat.updatedAt,
+    requests: (chat.requests || []).map(({ type, stallSize, preferredTime, createdAt }) => ({ type, stallSize, preferredTime, createdAt })),
+    question: chat.messages?.find((m) => m.role === "user")?.content?.slice(0, 200) || "",
+    messageCount: chat.messages?.length || 0,
+  }));
+
+  res.status(200).json(ApiResponse.ok("Previous chats", history));
 });
 
 // POST /api/chat — streams the assistant reply as Server-Sent Events
