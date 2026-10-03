@@ -21,6 +21,7 @@ import {
   updateAdminApplicationHr,
   addAdminApplicationNote,
 } from "../modules/careers/applicationsBoard.controller";
+import { getResultMessages, updateResultMessages } from "../modules/careers/resultMessages.controller";
 import {
   getCareerOptions,
   getAdminCareerOptions,
@@ -47,6 +48,8 @@ router.patch("/candidates/:id", updateCandidateProfile);
 router.post("/candidates/:id/photo", uploadPhotoMiddleware.any(), uploadCandidatePhoto);
 
 router.get("/options", getCareerOptions);
+// Messages shown on the eligibility result (edited in admin Career Settings → Result Messages)
+router.get("/result-messages", getResultMessages);
 
 router.post("/applications", createApplication);
 router.get("/applications/:id", getApplication);
@@ -61,6 +64,9 @@ router.post("/admin/jobs/generate-description", protect, generateJobDescription)
 router.post("/admin/jobs", protect, createAdminJob);
 router.patch("/admin/jobs/:id", protect, updateAdminJob);
 router.delete("/admin/jobs/:id", protect, deleteAdminJob);
+
+router.get("/admin/result-messages", protect, getResultMessages);
+router.put("/admin/result-messages", protect, updateResultMessages);
 
 router.get("/admin/options", protect, getAdminCareerOptions);
 router.post("/admin/options", protect, createCareerOption);
