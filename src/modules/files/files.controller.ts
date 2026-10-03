@@ -36,6 +36,29 @@ function parseOwnCloudinaryPdf(rawUrl: string) {
 }
 
 /**
+ * Downloads a stored file (e.g. a candidate CV) into memory so it can be attached to an
+ * email. Own-account Cloudinary PDFs go through the authenticated download URL (see
+ * streamPdf below); other https files are fetched directly. Returns null when unavailable.
+ */
+export async function downloadFileBuffer(rawUrl: string): Promise<Buffer | null> {
+  if (!/^https:\/\//i.test(rawUrl)) return null;
+  const asset = parseOwnCloudinaryPdf(rawUrl);
+  const url = asset
+    ? cloudinary.utils.private_download_url(asset.publicId, asset.resourceType === "raw" ? "" : "pdf", {
+        resource_type: asset.resourceType,
+        type: "upload",
+      })
+    : rawUrl;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return Buffer.from(await res.arrayBuffer());
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Streams a Cloudinary-hosted PDF to the browser so it opens inline.
  * GET /api/files/pdf?url=<cloudinary pdf url>
  *

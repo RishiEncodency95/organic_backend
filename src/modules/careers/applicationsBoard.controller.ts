@@ -2,6 +2,9 @@ import { Request, Response } from "express";
 import Application from "../../models/careers/Application.model";
 import CvAnalysis from "../../models/careers/CvAnalysis.model";
 import ApplicationEvent from "../../models/careers/ApplicationEvent.model";
+import { getHrSettingsDoc } from "./hrSettings.controller";
+import { sendHrForwardEmail } from "../../services/email.service";
+import { downloadFileBuffer } from "../files/files.controller";
 
 /**
  * Data for the admin "Applications & AI Response" screen: one flat row per candidate, from
@@ -160,6 +163,102 @@ const findApplication = async (id: string) => {
 // Parts of an application the admin can choose to share when forwarding to HR.
 const SHAREABLE = ["Application Form Details", "Uploaded CV (Resume)", "AI Analysis Result", "Screening Questions & Answers"];
 
+const HTML_ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+const esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
+
+const recipientLabel = (r: any) =>
+  `${r.name || r.email}${r.designation ? ` (${r.designation})` : ""} <${r.email}>${r.type && r.type !== "to" ? ` · ${String(r.type).toUpperCase()}` : ""}`;
+
+// Email sent to the HR recipients; only the parts the admin ticked are included.
+const buildForwardEmail = async (application: any, share: string[], note: string, forwardedBy: string) => {
+  await application.populate([{ path: "candidateId" }, { path: "jobId" }, { path: "cvAnalysisId" }]);
+  const candidate: any = application.candidateId || application.candidateSnapshot || {};
+  const job: any = application.jobId || {};
+  const analysis: any = application.cvAnalysisId || application.scoreSnapshot || {};
+  const score = Math.round(Number(analysis?.matchScore ?? 0)) || 0;
+  const name = text(candidate.name) || "Candidate";
+  const position = text(job.title) || "Unknown position";
+
+  const row = (label: string, value: unknown) =>
+    text(String(value ?? ""))
+      ? `<tr><td style="padding:4px 12px 4px 0;color:#64748b;white-space:nowrap">${esc(label)}</td><td style="padding:4px 0;color:#0f172a">${esc(value)}</td></tr>`
+      : "";
+  const section = (title: string, body: string) =>
+    `<h3 style="margin:20px 0 8px;font-size:15px;color:#148943">${esc(title)}</h3>${body}`;
+  const list = (items: unknown) =>
+    Array.isArray(items) && items.length
+      ? `<ul style="margin:4px 0;padding-left:18px">${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`
+      : "";
+
+  let html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0f172a;max-width:640px">
+    <p>Hello HR Team,</p>
+    <p><b>${esc(name)}</b>'s application for <b>${esc(position)}</b> (${esc(application.applicationId)}) has been forwarded to you by ${esc(forwardedBy)}.</p>`;
+  if (note) {
+    html += `<div style="background:#f1f5f9;border-left:3px solid #148943;padding:8px 12px;margin:12px 0"><b>Note:</b> ${esc(note)}</div>`;
+  }
+
+  if (share.includes("Application Form Details")) {
+    html += section(
+      "Application Form Details",
+      `<table style="border-collapse:collapse;font-size:13px">${[
+        row("Name", candidate.name),
+        row("Email", candidate.email),
+        row("Phone", candidate.verifiedPhone || candidate.phone),
+        row("Location", candidate.location),
+        row("Position", position),
+        row("Department", job.department),
+        row("Total Experience", candidate.totalExperience),
+        row("Current Company", candidate.currentCompany),
+        row("Current Designation", candidate.currentDesignation),
+        row("Current CTC", candidate.currentCTC),
+        row("Expected CTC", candidate.expectedCTC),
+        row("Notice Period", candidate.noticePeriod),
+        row("Willing to Relocate", candidate.willingToRelocate ? "Yes" : "No"),
+        row("Skills", Array.isArray(candidate.skills) ? candidate.skills.join(", ") : ""),
+        row("LinkedIn", candidate.linkedin),
+      ].join("")}</table>`
+    );
+  }
+  if (share.includes("AI Analysis Result")) {
+    html += section(
+      "AI Analysis Result",
+      `<p style="margin:0 0 6px"><b>Match Score:</b> ${score}% — ${esc(aiResultFor(score))}</p>` +
+        (text(analysis.explanation) ? `<p style="margin:0 0 6px">${esc(analysis.explanation)}</p>` : "") +
+        (list(analysis.strengths) ? `<p style="margin:6px 0 0"><b>Strengths</b></p>${list(analysis.strengths)}` : "") +
+        (list(analysis.gaps) ? `<p style="margin:6px 0 0"><b>Gaps</b></p>${list(analysis.gaps)}` : "")
+    );
+  }
+  if (share.includes("Screening Questions & Answers")) {
+    const questions = Array.isArray(job.screeningQuestions) ? job.screeningQuestions.filter(Boolean) : [];
+    html += section(
+      "Screening Questions & Answers",
+      (text(application.whyInterested)
+        ? `<p style="margin:0 0 6px"><b>Why are you interested in this role?</b><br/>${esc(application.whyInterested)}</p>`
+        : `<p style="margin:0 0 6px;color:#64748b">The candidate did not answer the screening question.</p>`) +
+        (questions.length ? `<p style="margin:6px 0 0"><b>Job screening questions</b></p>${list(questions)}` : "")
+    );
+  }
+
+  const attachments: { filename: string; content: Buffer }[] = [];
+  if (share.includes("Uploaded CV (Resume)")) {
+    const cvUrl = text(candidate?.cv?.cloudinaryUrl);
+    const file = cvUrl ? await downloadFileBuffer(cvUrl) : null;
+    if (file) {
+      const fileName = text(candidate.cv.originalFileName) || cvUrl.split("/").pop() || "cv.pdf";
+      attachments.push({ filename: fileName, content: file });
+      html += section("Uploaded CV (Resume)", `<p style="margin:0">Attached: ${esc(fileName)}</p>`);
+    } else {
+      html += section(
+        "Uploaded CV (Resume)",
+        `<p style="margin:0;color:#64748b">The CV file could not be attached. Please view it in the admin panel.</p>`
+      );
+    }
+  }
+
+  html += `<p style="margin-top:24px;color:#64748b;font-size:12px">Sent from the Bharat Organic Expo admin panel (Applications &amp; AI Response).</p></div>`;
+  return { subject: `Application forwarded: ${name} – ${position} (${application.applicationId})`, html, attachments };
+};
+
 export const updateAdminApplicationHr = async (req: Request, res: Response): Promise<void> => {
   try {
     const { hrStatus, note, changedBy, forward } = req.body || {};
@@ -178,23 +277,51 @@ export const updateAdminApplicationHr = async (req: Request, res: Response): Pro
     application.hrUpdatedAt = new Date();
     application.hrUpdatedBy = text(changedBy) || "Admin";
 
-    // Sent from the "Forward to HR" form: record recipients and what was shared.
+    // Sent from the "Forward to HR" form: recipients are emails from Career Settings → HR & Workflow.
+    let mail: { to: string[]; cc: string[]; bcc: string[]; share: string[]; note: string } | null = null;
+    let notifyHr = false;
     if (forward && typeof forward === "object") {
-      const recipients = (Array.isArray(forward.recipients) ? forward.recipients : []).map(text).filter(Boolean);
+      const settings: any = await getHrSettingsDoc();
+      if (settings.manualForward === false) {
+        res.status(403).json({ success: false, message: "Manual forward to HR is turned off in Career Settings → HR & Workflow." });
+        return;
+      }
+      const wanted = new Set(
+        (Array.isArray(forward.recipients) ? forward.recipients : []).map((e: unknown) => text(e).toLowerCase())
+      );
+      const chosen = (settings.recipients || []).filter((r: any) => r.active !== false && wanted.has(r.email));
       const share = (Array.isArray(forward.share) ? forward.share : []).map(text).filter((x: string) => SHAREABLE.includes(x));
-      if (recipients.length === 0 || share.length === 0) {
+      if (chosen.length === 0 || share.length === 0) {
         res.status(400).json({ success: false, message: "Choose at least one HR recipient and one item to share." });
         return;
       }
+      const byType = (t: string) => chosen.filter((r: any) => (r.type || "to") === t).map((r: any) => r.email as string);
+      mail = { to: byType("to"), cc: byType("cc"), bcc: byType("bcc"), share, note: text(forward.note) };
+      // An email needs a To address; if only CC/BCC people were picked, the first one becomes To.
+      if (mail.to.length === 0) {
+        const first = mail.cc.shift() || mail.bcc.shift();
+        if (first) mail.to.push(first);
+      }
+      notifyHr = settings.notifyHr !== false;
       application.hrForward = {
-        recipients,
+        recipients: chosen.map(recipientLabel),
         share,
-        note: text(forward.note),
+        note: mail.note,
         forwardedAt: application.hrUpdatedAt,
         forwardedBy: application.hrUpdatedBy,
       };
     }
     await application.save();
+
+    let email: { sent: boolean; error?: string; skipped?: boolean } | null = null;
+    if (mail) {
+      if (notifyHr) {
+        const content = await buildForwardEmail(application, mail.share, mail.note, application.hrUpdatedBy || "Admin");
+        email = await sendHrForwardEmail({ to: mail.to, cc: mail.cc, bcc: mail.bcc, ...content });
+      } else {
+        email = { sent: false, skipped: true };
+      }
+    }
 
     await ApplicationEvent.create({
       applicationId: application.applicationId,
@@ -204,7 +331,11 @@ export const updateAdminApplicationHr = async (req: Request, res: Response): Pro
       note: text(note) || `HR status changed to ${hrStatus}`,
     });
 
-    res.status(200).json({ success: true, message: `HR status updated to ${hrStatus}`, data: application });
+    res.status(200).json({
+      success: true,
+      message: `HR status updated to ${hrStatus}`,
+      data: { application, email, recipients: mail ? { to: mail.to, cc: mail.cc, bcc: mail.bcc } : null },
+    });
   } catch (error) {
     res.status(500).json({
       success: false,

@@ -22,6 +22,7 @@ import {
   addAdminApplicationNote,
 } from "../modules/careers/applicationsBoard.controller";
 import { getResultMessages, updateResultMessages } from "../modules/careers/resultMessages.controller";
+import { getHrSettings, updateHrSettings } from "../modules/careers/hrSettings.controller";
 import {
   getCareerOptions,
   getAdminCareerOptions,
@@ -67,6 +68,10 @@ router.delete("/admin/jobs/:id", protect, deleteAdminJob);
 
 router.get("/admin/result-messages", protect, getResultMessages);
 router.put("/admin/result-messages", protect, updateResultMessages);
+
+// HR recipients (To / CC / BCC) and forward settings (Career Settings → HR & Workflow)
+router.get("/admin/hr-settings", protect, getHrSettings);
+router.put("/admin/hr-settings", protect, updateHrSettings);
 
 router.get("/admin/options", protect, getAdminCareerOptions);
 router.post("/admin/options", protect, createCareerOption);
