@@ -184,13 +184,15 @@ export interface SendHrForwardEmailOptions {
   bcc: string[];
   subject: string;
   html: string;
-  attachments?: { filename: string; content: Buffer }[];
+  text?: string;
+  // `cid` marks an image shown inside the email (the logo) rather than a downloadable file.
+  attachments?: { filename: string; content: Buffer; cid?: string; contentType?: string }[];
 }
 
 // "Forward to HR" from admin Applications & AI Response; recipients come from
 // Career Settings → HR & Workflow with their To / CC / BCC choice.
 export const sendHrForwardEmail = async (options: SendHrForwardEmailOptions): Promise<{ sent: boolean; error?: string }> => {
-  const { to, cc, bcc, subject, html, attachments } = options;
+  const { to, cc, bcc, subject, html, text, attachments } = options;
   if (to.length === 0) return { sent: false, error: "No To recipient" };
 
   const log = await EmailLog.create({
@@ -218,6 +220,7 @@ export const sendHrForwardEmail = async (options: SendHrForwardEmailOptions): Pr
       bcc: bcc.length ? bcc : undefined,
       subject,
       html,
+      text,
       attachments,
     });
     log.status = "SENT";

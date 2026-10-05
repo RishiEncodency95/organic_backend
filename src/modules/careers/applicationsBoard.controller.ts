@@ -5,6 +5,7 @@ import ApplicationEvent from "../../models/careers/ApplicationEvent.model";
 import { getHrSettingsDoc } from "./hrSettings.controller";
 import { sendHrForwardEmail } from "../../services/email.service";
 import { downloadFileBuffer } from "../files/files.controller";
+import { getEmailLogo, LOGO_CID, renderHrForwardEmail } from "../../services/templates/hrForwardEmail";
 
 /**
  * Data for the admin "Applications & AI Response" screen: one flat row per candidate, from
@@ -163,11 +164,10 @@ const findApplication = async (id: string) => {
 // Parts of an application the admin can choose to share when forwarding to HR.
 const SHAREABLE = ["Application Form Details", "Uploaded CV (Resume)", "AI Analysis Result", "Screening Questions & Answers"];
 
-const HTML_ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-const esc = (v: unknown) => String(v ?? "").replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
-
 const recipientLabel = (r: any) =>
   `${r.name || r.email}${r.designation ? ` (${r.designation})` : ""} <${r.email}>${r.type && r.type !== "to" ? ` · ${String(r.type).toUpperCase()}` : ""}`;
+
+const strings = (v: unknown) => (Array.isArray(v) ? v.map((x) => text(String(x ?? ""))).filter(Boolean) : []);
 
 // Email sent to the HR recipients; only the parts the admin ticked are included.
 const buildForwardEmail = async (application: any, share: string[], note: string, forwardedBy: string) => {
@@ -176,87 +176,62 @@ const buildForwardEmail = async (application: any, share: string[], note: string
   const job: any = application.jobId || {};
   const analysis: any = application.cvAnalysisId || application.scoreSnapshot || {};
   const score = Math.round(Number(analysis?.matchScore ?? 0)) || 0;
-  const name = text(candidate.name) || "Candidate";
-  const position = text(job.title) || "Unknown position";
 
-  const row = (label: string, value: unknown) =>
-    text(String(value ?? ""))
-      ? `<tr><td style="padding:4px 12px 4px 0;color:#64748b;white-space:nowrap">${esc(label)}</td><td style="padding:4px 0;color:#0f172a">${esc(value)}</td></tr>`
-      : "";
-  const section = (title: string, body: string) =>
-    `<h3 style="margin:20px 0 8px;font-size:15px;color:#148943">${esc(title)}</h3>${body}`;
-  const list = (items: unknown) =>
-    Array.isArray(items) && items.length
-      ? `<ul style="margin:4px 0;padding-left:18px">${items.map((i) => `<li>${esc(i)}</li>`).join("")}</ul>`
-      : "";
+  const attachments: { filename: string; content: Buffer; cid?: string; contentType?: string }[] = [];
+  const logo = getEmailLogo();
+  if (logo) attachments.push({ filename: "bharat-organic-expo.png", content: logo, cid: LOGO_CID, contentType: "image/png" });
 
-  let html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#0f172a;max-width:640px">
-    <p>Hello HR Team,</p>
-    <p><b>${esc(name)}</b>'s application for <b>${esc(position)}</b> (${esc(application.applicationId)}) has been forwarded to you by ${esc(forwardedBy)}.</p>`;
-  if (note) {
-    html += `<div style="background:#f1f5f9;border-left:3px solid #148943;padding:8px 12px;margin:12px 0"><b>Note:</b> ${esc(note)}</div>`;
-  }
-
-  if (share.includes("Application Form Details")) {
-    html += section(
-      "Application Form Details",
-      `<table style="border-collapse:collapse;font-size:13px">${[
-        row("Name", candidate.name),
-        row("Email", candidate.email),
-        row("Phone", candidate.verifiedPhone || candidate.phone),
-        row("Location", candidate.location),
-        row("Position", position),
-        row("Department", job.department),
-        row("Total Experience", candidate.totalExperience),
-        row("Current Company", candidate.currentCompany),
-        row("Current Designation", candidate.currentDesignation),
-        row("Current CTC", candidate.currentCTC),
-        row("Expected CTC", candidate.expectedCTC),
-        row("Notice Period", candidate.noticePeriod),
-        row("Willing to Relocate", candidate.willingToRelocate ? "Yes" : "No"),
-        row("Skills", Array.isArray(candidate.skills) ? candidate.skills.join(", ") : ""),
-        row("LinkedIn", candidate.linkedin),
-      ].join("")}</table>`
-    );
-  }
-  if (share.includes("AI Analysis Result")) {
-    html += section(
-      "AI Analysis Result",
-      `<p style="margin:0 0 6px"><b>Match Score:</b> ${score}% — ${esc(aiResultFor(score))}</p>` +
-        (text(analysis.explanation) ? `<p style="margin:0 0 6px">${esc(analysis.explanation)}</p>` : "") +
-        (list(analysis.strengths) ? `<p style="margin:6px 0 0"><b>Strengths</b></p>${list(analysis.strengths)}` : "") +
-        (list(analysis.gaps) ? `<p style="margin:6px 0 0"><b>Gaps</b></p>${list(analysis.gaps)}` : "")
-    );
-  }
-  if (share.includes("Screening Questions & Answers")) {
-    const questions = Array.isArray(job.screeningQuestions) ? job.screeningQuestions.filter(Boolean) : [];
-    html += section(
-      "Screening Questions & Answers",
-      (text(application.whyInterested)
-        ? `<p style="margin:0 0 6px"><b>Why are you interested in this role?</b><br/>${esc(application.whyInterested)}</p>`
-        : `<p style="margin:0 0 6px;color:#64748b">The candidate did not answer the screening question.</p>`) +
-        (questions.length ? `<p style="margin:6px 0 0"><b>Job screening questions</b></p>${list(questions)}` : "")
-    );
-  }
-
-  const attachments: { filename: string; content: Buffer }[] = [];
-  if (share.includes("Uploaded CV (Resume)")) {
+  const cvShared = share.includes("Uploaded CV (Resume)");
+  let cvFileName = "";
+  if (cvShared) {
     const cvUrl = text(candidate?.cv?.cloudinaryUrl);
     const file = cvUrl ? await downloadFileBuffer(cvUrl) : null;
     if (file) {
-      const fileName = text(candidate.cv.originalFileName) || cvUrl.split("/").pop() || "cv.pdf";
-      attachments.push({ filename: fileName, content: file });
-      html += section("Uploaded CV (Resume)", `<p style="margin:0">Attached: ${esc(fileName)}</p>`);
-    } else {
-      html += section(
-        "Uploaded CV (Resume)",
-        `<p style="margin:0;color:#64748b">The CV file could not be attached. Please view it in the admin panel.</p>`
-      );
+      cvFileName = text(candidate.cv.originalFileName) || cvUrl.split("/").pop() || "resume.pdf";
+      attachments.push({ filename: cvFileName, content: file });
     }
   }
 
-  html += `<p style="margin-top:24px;color:#64748b;font-size:12px">Sent from the Bharat Organic Expo admin panel (Applications &amp; AI Response).</p></div>`;
-  return { subject: `Application forwarded: ${name} – ${position} (${application.applicationId})`, html, attachments };
+  const content = renderHrForwardEmail({
+    applicationId: application.applicationId,
+    forwardedBy,
+    forwardedAt: application.hrUpdatedAt || new Date(),
+    note,
+    share,
+    candidate: {
+      name: text(candidate.name) || "Candidate",
+      email: text(candidate.email),
+      phone: text(candidate.verifiedPhone) || text(candidate.phone),
+      location: text(candidate.location),
+      linkedin: text(candidate.linkedin),
+      totalExperience: text(candidate.totalExperience),
+      currentCompany: text(candidate.currentCompany),
+      currentDesignation: text(candidate.currentDesignation),
+      currentCtc: text(candidate.currentCTC),
+      expectedCtc: text(candidate.expectedCTC),
+      noticePeriod: text(candidate.noticePeriod),
+      willingToRelocate: candidate.willingToRelocate ? "Yes" : "No",
+      skills: strings(candidate.skills),
+    },
+    job: {
+      title: text(job.title) || "Unknown position",
+      department: text(job.department),
+      screeningQuestions: strings(job.screeningQuestions),
+    },
+    analysis: {
+      score,
+      result: aiResultFor(score),
+      summary: text(analysis.explanation),
+      strengths: strings(analysis.strengths),
+      gaps: strings(analysis.gaps),
+    },
+    whyInterested: text(application.whyInterested),
+    cvFileName,
+    cvShared,
+    hasLogo: !!logo,
+  });
+
+  return { ...content, attachments };
 };
 
 export const updateAdminApplicationHr = async (req: Request, res: Response): Promise<void> => {
