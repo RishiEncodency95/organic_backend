@@ -29,6 +29,15 @@ export const chatLimiter = rateLimit({
 });
 
 // Chatbot details form — each submit can send WhatsApp messages
+// Chat clicks and scripted replies saved before the details form
+export const chatTrackLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60,
+  message: new ApiError(429, "Too many requests. Please wait a minute and try again."),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export const chatLeadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10,
