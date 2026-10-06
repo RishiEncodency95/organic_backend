@@ -25,6 +25,9 @@ import websiteRegistrationRouter from "../modules/website/websiteRegistration.ro
 import contactEnquiryRouter from "../modules/website/contact/contactEnquiry.routes";
 import verifyRouter from "../modules/website/contact/verify.routes";
 import partnershipEnquiryRouter from "../modules/website/contact/partnershipEnquiry.routes";
+import buyerEnquiryRouter from "../modules/website/buyerEnquiry/buyerEnquiry.routes";
+import { visitorAdminRouter, visitorPublicRouter } from "../modules/website/visitorRegistration/visitorRegistration.routes";
+import { exhibitorAdminRouter, exhibitorPublicRouter } from "../modules/expo/exhibitorRegistration.routes";
 import blogPostRouter from "../modules/blogPost/blogPost.routes";
 import careersRouter from "./careers.routes";
 import msmeRouter from "./msme.routes";
@@ -92,6 +95,13 @@ router.use("/contact-enquiry", contactEnquiryRouter);
 router.use("/website/contact-enquiry", contactEnquiryRouter);
 router.use("/website/contact", contactEnquiryRouter);
 router.use("/partnership-enquiry", partnershipEnquiryRouter);
+router.use("/buyer-enquiries", buyerEnquiryRouter);
+// Visitor registration forms (/corporate-visitors, /general-visitors, ...) + admin list
+router.use("/", visitorPublicRouter);
+router.use("/visitor-registrations", visitorAdminRouter);
+// Book a stand (/exhibitor-registration, /payment/create-order/:id, /payment/verify-payment) + admin list
+router.use("/", exhibitorPublicRouter);
+router.use("/exhibitor-registrations", exhibitorAdminRouter);
 router.use("/verify", verifyRouter);
 router.use("/website/verify", verifyRouter);
 
