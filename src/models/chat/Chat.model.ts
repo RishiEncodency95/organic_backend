@@ -5,6 +5,8 @@ const chatMessageSchema = new Schema(
   {
     role: { type: String, enum: ["user", "assistant"], required: true },
     content: { type: String, required: true },
+    // Assistant reply that had no answer in the knowledge — listed in the manager's Review Queue
+    needsReview: { type: Boolean },
     createdAt: { type: Date, default: Date.now },
   },
   { _id: false }

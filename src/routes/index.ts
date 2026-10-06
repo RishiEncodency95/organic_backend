@@ -36,6 +36,7 @@ import expoRouter from "../modules/expo/expo.routes";
 import buyerConfigRouter from "../modules/dropdowns/buyerConfig.routes";
 import systemServicesRouter from "../modules/systemServices/systemServices.routes";
 import chatRouter from "../modules/chat/chat.routes";
+import chatbotRouter from "../modules/chatbot/chatbot.routes";
 
 const router = Router();
 
@@ -51,6 +52,7 @@ router.get("/health", (req, res) => {
 // API Routes
 router.use("/system-services", systemServicesRouter);
 router.use("/", chatRouter);
+router.use("/", chatbotRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/dropdowns", dropdownsRouter);
 router.use("/", locationsRouter);

@@ -1,5 +1,4 @@
 import { Request, Response } from "express";
-import OpenAI from "openai";
 import { isValidObjectId } from "mongoose";
 import Chat from "../../models/chat/Chat.model";
 import Otp from "../../models/contact/otp.model";
@@ -10,7 +9,8 @@ import { ApiResponse } from "../../utils/ApiResponse";
 import { logger } from "../../utils/logger";
 import { env } from "../../config/env";
 import { sendWhatsAppTemplate } from "../../services/whatsapp.service";
-import { buildInstructions, FALLBACK_REPLY } from "./chat.prompt";
+import { buildInstructions, FALLBACK_REPLY, NO_ANSWER_MARKER } from "./chat.prompt";
+import { getBotContext, getOpenAI } from "../chatbot/chatbot.service";
 import { toTenDigitMobile } from "./chat.schema";
 
 const HISTORY_LIMIT = 10;
@@ -19,12 +19,6 @@ const DUPLICATE_ENQUIRY_MS = 24 * 60 * 60 * 1000;
 const CHATBOT_SERVICE = "Chatbot (Organic Mitra)";
 const NO_QUESTION_PREFIX = "Started a chat with Organic Mitra on";
 
-let openai: OpenAI | null = null;
-const getOpenAI = (): OpenAI | null => {
-  if (!env.OPENAI_API_KEY) return null;
-  if (!openai) openai = new OpenAI({ apiKey: env.OPENAI_API_KEY });
-  return openai;
-};
 
 /** The visitor's IP and browser; a chat is saved as "Visitor <ip>" until the mobile number is verified */
 const visitorOf = (req: Request) => {
@@ -257,17 +251,19 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
   const message = String(req.body.message).trim().slice(0, 1000);
   const pageUrl = req.body.pageUrl ? String(req.body.pageUrl).slice(0, 500) : undefined;
 
-  const { visitor } = visitorOf(req);
+  const { visitorName, visitor } = visitorOf(req);
 
+  // Visitors chat freely: until the mobile number is verified the chat is saved as "Visitor <ip>"
   const chat = await Chat.findOne({ sessionId })
     .select({ lead: 1, enquiryId: 1, messages: { $slice: -HISTORY_LIMIT } })
     .lean();
-  if (!chat?.lead?.name) {
-    throw ApiError.badRequest("Please share your name and mobile number first.");
+  const { ctx, settings } = await getBotContext("live");
+  if (settings.enabled === false) {
+    throw new ApiError(503, "The chat assistant is switched off right now.");
   }
 
-  // A question asked before the details form is already saved (see trackChat) — do not save or send it twice
-  const history = chat.messages || [];
+  // A question already saved by trackChat (asked just before) is not saved or sent twice
+  const history = chat?.messages || [];
   const last = history[history.length - 1];
   const alreadySaved = last?.role === "user" && last.content.trim() === message;
   const context = alreadySaved ? history.slice(0, -1) : history;
@@ -288,7 +284,27 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
     if (!res.writableEnded) controller.abort();
   });
 
+  // The model ends an unanswerable reply with NO_ANSWER_MARKER. Text that could be the start of
+  // the marker is held back until it is clear, so the visitor never sees it.
   let reply = "";
+  let sent = 0;
+  const flush = (final: boolean) => {
+    const clean = reply.split(NO_ANSWER_MARKER).join("");
+    let safe = clean.length;
+    if (!final) {
+      for (let k = Math.min(NO_ANSWER_MARKER.length - 1, clean.length); k > 0; k--) {
+        if (NO_ANSWER_MARKER.startsWith(clean.slice(-k))) {
+          safe = clean.length - k;
+          break;
+        }
+      }
+    }
+    if (safe > sent) {
+      send({ delta: clean.slice(sent, safe) });
+      sent = safe;
+    }
+  };
+
   try {
     const client = getOpenAI();
     if (!client) throw new Error("OPENAI_API_KEY is not configured");
@@ -297,7 +313,7 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
     const stream = await client.responses.create(
       {
         model,
-        instructions: buildInstructions(chat.lead.name),
+        instructions: buildInstructions(chat?.lead?.name || undefined, ctx),
         input: [
           ...context.map((m) => ({ role: m.role, content: m.content })),
           { role: "user" as const, content: message },
@@ -313,12 +329,13 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
     for await (const event of stream) {
       if (event.type === "response.output_text.delta") {
         reply += event.delta;
-        send({ delta: event.delta });
+        flush(false);
       } else if (event.type === "response.failed" || event.type === "error") {
         throw new Error(`OpenAI stream failed: ${JSON.stringify(event)}`);
       }
     }
 
+    flush(true);
     send({ done: true });
   } catch (error: any) {
     if (!controller.signal.aborted) {
@@ -330,11 +347,13 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
   }
 
   // Save even a partial reply when the visitor closed the chat mid-stream
+  const needsReview = reply.includes(NO_ANSWER_MARKER);
+  const replyText = reply.split(NO_ANSWER_MARKER).join("").trim();
   const now = new Date();
-  const toSave: { role: "user" | "assistant"; content: string; createdAt: Date }[] = alreadySaved
+  const toSave: { role: "user" | "assistant"; content: string; createdAt: Date; needsReview?: boolean }[] = alreadySaved
     ? []
     : [{ role: "user", content: message, createdAt: now }];
-  if (reply.trim()) toSave.push({ role: "assistant", content: reply, createdAt: new Date() });
+  if (replyText) toSave.push({ role: "assistant", content: replyText, createdAt: new Date(), ...(needsReview ? { needsReview } : {}) });
 
   try {
     await Chat.updateOne(
@@ -342,12 +361,13 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
       {
         $push: { messages: { $each: toSave } },
         $set: { visitor, ...(pageUrl ? { pageUrl } : {}) },
+        $setOnInsert: { visitorName },
       },
       { upsert: true }
     );
     // Put the visitor's first question on their enquiry so the team sees what they asked
     // (only while it still has no question — a reused enquiry keeps the earlier one)
-    if (chat.enquiryId) {
+    if (chat?.enquiryId) {
       await ContactEnquiry.updateOne(
         { _id: chat.enquiryId, message: { $regex: `^${NO_QUESTION_PREFIX}` } },
         { $set: { message: `Chatbot question: ${message}` } }
