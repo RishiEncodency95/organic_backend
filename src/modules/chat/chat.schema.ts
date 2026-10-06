@@ -61,3 +61,24 @@ export const chatMessageSchema = z.object({
       .max(1000, "Message must be at most 1000 characters"),
   }),
 });
+
+// What a visitor does in the chat before (or besides) talking to the AI: topic / option clicks,
+// the scripted replies they saw, a question waiting for the details form, and 👍 / 👎 feedback
+export const chatTrackSchema = z.object({
+  body: z
+    .object({
+      sessionId,
+      pageUrl,
+      messages: z
+        .array(
+          z.object({
+            role: z.enum(["user", "assistant"]),
+            content: z.string().trim().min(1).max(2000),
+          })
+        )
+        .max(10)
+        .optional(),
+      feedback: z.enum(["yes", "no"]).optional(),
+    })
+    .refine((b) => b.messages?.length || b.feedback, "Nothing to save"),
+});
