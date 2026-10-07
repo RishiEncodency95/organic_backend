@@ -44,6 +44,11 @@ const envSchema = z.object({
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional(),
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: z.string().optional(),
 
+  // Website cache refresh after admin saves (frontend app/api/revalidate). Both optional:
+  // without them the website picks up admin changes within its 60s cache window.
+  FRONTEND_URL: z.string().optional(),
+  REVALIDATE_SECRET: z.string().optional(),
+
   // Razorpay
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),

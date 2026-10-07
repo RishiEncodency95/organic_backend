@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import Settings from "../../models/settings.model";
 import GalleryHero from "../../models/gallery/galleryHero.model";
 import GalleryCounters from "../../models/gallery/galleryCounters.model";
+import { revalidateWebsite } from "../../utils/revalidateWebsite";
 
 const defaultFooter = {
   key: "footer",
@@ -89,6 +90,85 @@ export const getSettings = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
+const PAGE_CONFIG_KEY_PATTERN = /^[A-Za-z0-9]+Page$/;
+const PAGE_STATUSES = ["Published", "Draft"] as const;
+
+// Small public payload for the website: { [configKey]: "Published" | "Draft" }.
+// Only pages whose status was explicitly set appear; anything missing is Published.
+export const getPageStatuses = async (req: Request, res: Response) => {
+  try {
+    const website = (req.query.website as string) || "Organicexpo";
+    const doc = await Settings.findOne({ website }).lean<{ data?: Record<string, any> }>();
+    const data = doc?.data || {};
+
+    const pages: Record<string, string> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (!PAGE_CONFIG_KEY_PATTERN.test(key) || !value || typeof value !== "object") continue;
+      const status = (value as { status?: unknown }).status;
+      if (status === "Published" || status === "Draft") pages[key] = status;
+    }
+
+    res.set("Cache-Control", "no-store");
+    return res.status(200).json({ success: true, data: { pages } });
+  } catch (err: any) {
+    console.error("Error getting page statuses:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: err.message,
+    });
+  }
+};
+
+// Sets only data.<configKey>.status (+ audit fields) atomically, so the toggle
+// can't clobber the rest of the page config the way a full settings PUT would.
+export const updatePageStatus = async (req: Request, res: Response) => {
+  try {
+    const website = (req.query.website as string) || req.body.website || "Organicexpo";
+    const { configKey, status, updatedBy } = req.body || {};
+
+    if (typeof configKey !== "string" || !PAGE_CONFIG_KEY_PATTERN.test(configKey)) {
+      return res.status(400).json({ success: false, message: "Invalid configKey" });
+    }
+    if (!PAGE_STATUSES.includes(status)) {
+      return res.status(400).json({ success: false, message: "status must be Published or Draft" });
+    }
+    if (configKey === "landingPage" && status === "Draft") {
+      return res.status(400).json({ success: false, message: "The homepage cannot be unpublished" });
+    }
+
+    const now = new Date().toISOString();
+    const update: Record<string, unknown> = {
+      [`data.${configKey}.status`]: status,
+      [`data.${configKey}.lastUpdated`]: now,
+    };
+    if (status === "Published") update[`data.${configKey}.publishedAt`] = now;
+    if (typeof updatedBy === "string" && updatedBy.trim()) {
+      update[`data.${configKey}.updatedBy`] = updatedBy.trim();
+    }
+
+    const doc = await Settings.findOneAndUpdate(
+      { website },
+      { $set: update },
+      { new: true, upsert: true }
+    ).lean<{ data?: Record<string, any> }>();
+    revalidateWebsite();
+
+    return res.status(200).json({
+      success: true,
+      message: status === "Published" ? "Page published" : "Page unpublished",
+      data: { configKey, ...(doc?.data?.[configKey] || {}) },
+    });
+  } catch (err: any) {
+    console.error("Error updating page status:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update page status",
       error: err.message,
     });
   }
@@ -183,6 +263,7 @@ export const updateSettings = async (req: Request, res: Response) => {
       doc.markModified("data");
       await doc.save();
     }
+    revalidateWebsite();
 
     return res.status(200).json({
       success: true,
