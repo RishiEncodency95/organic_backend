@@ -7,6 +7,7 @@ import { Admin } from "../models/Admin.model";
 import { ActivityLog, ActivityAction } from "../models/ActivityLog.model";
 import type { JwtPayload } from "./auth.middleware";
 import { activityContext, type RecordedChange } from "../config/activityTracker";
+import { clientIp } from "../utils/clientIp";
 
 /*
  * Activity log: records every write request (POST / PUT / PATCH / DELETE) made with an
@@ -60,11 +61,6 @@ const tokenUserId = (req: Request): string | undefined => {
 };
 
 const clip = (value: unknown, max: number) => (typeof value === "string" ? value.trim().slice(0, max) : "");
-
-const clientIp = (req: Request) => {
-  const ip = (req.ip || req.socket.remoteAddress || "").replace(/^::ffff:/, "");
-  return ip === "::1" ? "127.0.0.1" : ip;
-};
 
 const titleCase = (text: string) =>
   text

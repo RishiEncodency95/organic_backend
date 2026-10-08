@@ -12,6 +12,7 @@ import { logger } from "./utils/logger";
 import { errorHandler } from "./middlewares/errorHandler.middleware";
 import { apiLimiter } from "./middlewares/rateLimiter.middleware";
 import { activityLogger } from "./middlewares/activityLog.middleware";
+import { apiBlockGuard } from "./modules/apiLimits/apiLimits.service";
 import router from "./routes/index";
 import { generateSitemapXml } from "./modules/seo/sitemap.controller";
 
@@ -133,6 +134,10 @@ app.get("/sitemap.xml", generateSitemapXml);
 // ─── Activity Log (admin create / update / delete / login) ───────────────────
 
 app.use("/api", activityLogger);
+
+// ─── IP Block Limits (3 attempts → IP blocked on that website API) ──────────
+
+app.use("/api", apiBlockGuard);
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 

@@ -41,6 +41,7 @@ router.get("/jobs", getJobs);
 router.get("/jobs/:slug/export", exportJobDocx);
 router.get("/jobs/:slug", getJobBySlug);
 
+// Attempts per IP are limited by apiBlockGuard (app.ts), before the file is read
 router.post("/cv/upload", uploadCvMiddleware.any(), uploadCv);
 router.post("/cv/analyze", analyzeCv);
 router.get("/analysis/:id", getAnalysisResult);
