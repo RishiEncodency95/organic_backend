@@ -43,6 +43,9 @@ export const DROPDOWN_LISTS: Record<string, DropdownListDefinition> = {
   "partnership-category": { name: "Partnership Category", group: "Enquiries", usedIn: ["Partnership Enquiry (/partnership)"] },
   "partner-preferred-category": { name: "Preferred Partner Category", group: "Enquiries", usedIn: ["Hotel, Logistics, Manpower, Printing, Stall Design & Travel partner pages"] },
   "partner-state": { name: "Partner State", group: "Enquiries", usedIn: ["Hotel, Logistics, Manpower, Printing, Stall Design & Travel partner pages"] },
+  "buyer-enquiry-country": { name: "Buyer Enquiry – Country", group: "Enquiries", usedIn: ["Buyer-Seller Meet – Enquiry popup"] },
+  "buyer-enquiry-type": { name: "Buyer Enquiry – Buyer Type", group: "Enquiries", usedIn: ["Buyer-Seller Meet – Enquiry popup"] },
+  "buyer-enquiry-topic": { name: "Buyer Enquiry – Enquiry About", group: "Enquiries", usedIn: ["Buyer-Seller Meet – Enquiry popup"] },
 
   // ---- MSME ----
   "msme-enterprise-type": { name: "Enterprise Type", group: "MSME", usedIn: ["MSME Enterprise Form"] },
@@ -72,6 +75,14 @@ export const DROPDOWN_LISTS: Record<string, DropdownListDefinition> = {
   "buyer-exhibitor-type": { name: "Exhibitor Types to Meet", group: "Buyer Registration", usedIn: ["Buyer Registration (checkboxes)"] },
   "buyer-meeting-objective": { name: "Meeting Objectives", group: "Buyer Registration", usedIn: ["Buyer Registration (checkboxes)"] },
   "buyer-preferred-business-type": { name: "Preferred Business Type", group: "Buyer Registration", usedIn: ["Buyer Registration (checkboxes)"] },
+  "buyer-legal-entity-type": { name: "Legal Entity Type", group: "Buyer Registration", usedIn: ["International Buyer Registration"] },
+  "buyer-intl-stall-type": { name: "Preferred Stall Type (International)", group: "Buyer Registration", usedIn: ["International Buyer Registration"] },
+  "buyer-intl-stall-size": { name: "Stall Size Requirement (International)", group: "Buyer Registration", usedIn: ["International Buyer Registration"] },
+  "buyer-intl-stall-location": { name: "Preferred Stall Location (International)", group: "Buyer Registration", usedIn: ["International Buyer Registration"] },
+  "buyer-intl-sponsorship-type": { name: "Preferred Sponsorship Type", group: "Buyer Registration", usedIn: ["International Buyer Registration"] },
+  "buyer-intl-certification": { name: "Certifications (International)", group: "Buyer Registration", usedIn: ["International Buyer Registration (checkboxes)"] },
+  "buyer-intl-looking-for": { name: "B2B – Looking For", group: "Buyer Registration", usedIn: ["International Buyer Registration (checkboxes)"] },
+  "buyer-payment-mode": { name: "Payment Mode", group: "Buyer Registration", usedIn: ["International Buyer Registration"] },
 
   // ---- Visitor registration ----
   "visitor-corporate-industry": { name: "Industry Sector (Corporate)", group: "Visitor Registration", usedIn: ["Corporate Visitor Registration"] },

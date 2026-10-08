@@ -4,6 +4,8 @@ import asyncHandler from "../../utils/asyncHandler";
 import { ApiError } from "../../utils/ApiError";
 import { ApiResponse } from "../../utils/ApiResponse";
 import DropdownOption from "../../models/dropdown/DropdownOption.model";
+import DropdownListMeta from "../../models/dropdown/DropdownListMeta.model";
+import { Admin } from "../../models/Admin.model";
 import { DROPDOWN_LISTS, isDropdownList } from "./dropdownLists";
 
 const PUBLIC_FIELDS = "label value parentValue -_id";
@@ -37,6 +39,17 @@ const checkParent = async (list: string, parentValue: unknown): Promise<string> 
 const rethrowDuplicate = (error: any): never => {
   if (error?.code === 11000) throw new ApiError(409, "This value already exists in the list");
   throw error;
+};
+
+/** Records the signed-in admin as the last one to change a list (shown as "Updated By"). */
+const touchList = async (req: Request, list: string) => {
+  const id = req.user?.id;
+  const admin = id && isValidObjectId(id) ? await Admin.findById(id).select("name email").lean<any>() : null;
+  await DropdownListMeta.updateOne(
+    { list },
+    { $set: { updatedBy: admin?.name || admin?.email || "Admin", updatedById: id, updatedAt: new Date() } },
+    { upsert: true }
+  );
 };
 
 /* ------------------------------ Public ------------------------------ */
@@ -77,6 +90,8 @@ export const getAdminLists = asyncHandler(async (_req: Request, res: Response) =
     { $group: { _id: "$list", total: { $sum: 1 }, active: { $sum: { $cond: ["$isActive", 1, 0] } } } },
   ]);
   const byList = Object.fromEntries(counts.map((c) => [c._id, c]));
+  const metas = await DropdownListMeta.find().select("list updatedBy updatedAt -_id").lean<any[]>();
+  const metaByList = Object.fromEntries(metas.map((m) => [m.list, m]));
 
   const lists = Object.entries(DROPDOWN_LISTS).map(([key, def]) => ({
     key,
@@ -84,6 +99,8 @@ export const getAdminLists = asyncHandler(async (_req: Request, res: Response) =
     parentName: def.parent ? DROPDOWN_LISTS[def.parent].name : undefined,
     total: byList[key]?.total ?? 0,
     active: byList[key]?.active ?? 0,
+    updatedBy: metaByList[key]?.updatedBy ?? null,
+    updatedAt: metaByList[key]?.updatedAt ?? null,
   }));
   res.status(200).json(new ApiResponse(200, "Dropdown lists fetched successfully", lists));
 });
@@ -116,6 +133,7 @@ export const createOption = asyncHandler(async (req: Request, res: Response) => 
     order,
     isActive: body.isActive === undefined ? true : Boolean(body.isActive),
   }).catch(rethrowDuplicate);
+  await touchList(req, list);
 
   res.status(201).json(new ApiResponse(201, "Option created successfully", option));
 });
@@ -140,6 +158,7 @@ export const updateOption = asyncHandler(async (req: Request, res: Response) => 
   if (body.isActive !== undefined) option.isActive = Boolean(body.isActive);
 
   await option.save().catch(rethrowDuplicate);
+  await touchList(req, option.list);
 
   // Keep dependent options attached when a parent option's value is renamed.
   const children = Object.entries(DROPDOWN_LISTS).filter(([, def]) => def.parent === option.list).map(([key]) => key);
@@ -166,6 +185,7 @@ export const deleteOption = asyncHandler(async (req: Request, res: Response) => 
   }
 
   await option.deleteOne();
+  await touchList(req, option.list);
   res.status(200).json(new ApiResponse(200, "Option deleted successfully", null));
 });
 
@@ -183,6 +203,7 @@ export const reorderOptions = asyncHandler(async (req: Request, res: Response) =
   await DropdownOption.bulkWrite(
     ids.map((id: string, index: number) => ({ updateOne: { filter: { _id: id, list }, update: { $set: { order: index } } } }))
   );
+  await touchList(req, list);
   const options = await DropdownOption.find({ list }).sort({ parentValue: 1, order: 1 }).lean();
   res.status(200).json(new ApiResponse(200, "Order saved successfully", options));
 });

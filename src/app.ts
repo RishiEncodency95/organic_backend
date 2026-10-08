@@ -1,3 +1,5 @@
+// Must load before any model: watches old → new values for the Activity Log
+import "./config/activityTracker";
 import express from "express";
 import path from "path";
 import helmet from "helmet";
@@ -9,6 +11,7 @@ import { env } from "./config/env";
 import { logger } from "./utils/logger";
 import { errorHandler } from "./middlewares/errorHandler.middleware";
 import { apiLimiter } from "./middlewares/rateLimiter.middleware";
+import { activityLogger } from "./middlewares/activityLog.middleware";
 import router from "./routes/index";
 import { generateSitemapXml } from "./modules/seo/sitemap.controller";
 
@@ -126,6 +129,10 @@ app.use("/api/v1", apiLimiter);
 // ─── Sitemap (public, no auth, no rate limit) ────────────────────────────────
 
 app.get("/sitemap.xml", generateSitemapXml);
+
+// ─── Activity Log (admin create / update / delete / login) ───────────────────
+
+app.use("/api", activityLogger);
 
 // ─── Routes ──────────────────────────────────────────────────────────────────
 
