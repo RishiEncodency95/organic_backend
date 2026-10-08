@@ -33,8 +33,9 @@ const MAX_STRING = 400;
 const MAX_ARRAY = 25;
 const MAX_DEPTH = 4;
 
-// Never stored in the log
-const SECRET = /pass(word)?|secret|token|otp|hash|salt|api[-_]?key|private[-_]?key|2fa|totp/i;
+// Never stored in the log. Matched on the end of the key (accessToken, twoFactorSecret,
+// passwordHash) or an otp prefix (otpCode), so passType / passport / hashtags stay readable.
+const SECRET = /(password|passwd|secret|token|hash|salt|api[-_]?key|private[-_]?key|totp)s?$|^otp/i;
 // Not worth showing as a change
 const NOISE = new Set(["updatedAt", "createdAt", "__v"]);
 // Models whose writes are bookkeeping, not admin content
@@ -46,6 +47,7 @@ const clean = (value: unknown, depth = 0): unknown => {
   if (value instanceof Date) return value.toISOString();
   if (value instanceof mongoose.Types.ObjectId) return value.toString();
   if (Buffer.isBuffer(value)) return `[${value.length} bytes]`;
+  if (value instanceof Map) return clean(Object.fromEntries(value), depth);
   if (typeof value === "string") return value.length > MAX_STRING ? `${value.slice(0, MAX_STRING)}… (${value.length} chars)` : value;
   if (typeof value !== "object") return value;
   if (depth >= MAX_DEPTH) return Array.isArray(value) ? `[${value.length} items]` : "{…}";
@@ -89,6 +91,9 @@ const note = (change: RecordedChange) => {
   ctx.changes.push(change);
 };
 
+// bulkWrite's post hook gets no operations, so the "before" copy waits here per request
+const bulkBefore = new WeakMap<RequestContext, { model: string; docs: any[] }>();
+
 const idOf = (doc: any) => (doc?._id !== undefined ? String(doc._id) : undefined);
 
 const UPDATE_QUERIES = ["findOneAndUpdate", "updateOne", "updateMany", "findOneAndReplace", "replaceOne"] as const;
@@ -98,18 +103,19 @@ function activityPlugin(schema: Schema) {
   // Mongoose's typings take one hook name at a time; it accepts a list at runtime
   const hooks = schema as any;
   // Documents loaded during an admin request remember how they looked, for save() diffs
+  // (sub-documents are part of their parent's change, not records of their own)
   schema.post("init", function (this: any) {
-    if (activityContext.getStore()) this.$locals.activityOriginal = snapshot(this);
+    if (activityContext.getStore() && !this.$isSubdocument) this.$locals.activityOriginal = snapshot(this);
   });
 
   schema.pre("save", function (this: any) {
-    if (!activityContext.getStore()) return;
+    if (!activityContext.getStore() || this.$isSubdocument) return;
     this.$locals.activityWasNew = this.isNew;
   });
 
   schema.post("save", function (this: any) {
     const model = (this.constructor as any)?.modelName;
-    if (!activityContext.getStore() || !model) return;
+    if (!activityContext.getStore() || !model || this.$isSubdocument) return;
     const after = snapshot(this);
     if (this.$locals.activityWasNew) {
       note({ entity: model, entityId: idOf(this), operation: "created", after });
@@ -159,6 +165,36 @@ function activityPlugin(schema: Schema) {
     if (!activityContext.getStore() || SKIP_MODELS.has(this.model?.modelName)) return;
     const docs: any[] = await this.model.find(this.getFilter()).limit(MAX_DOCS_PER_QUERY).lean();
     for (const doc of docs) note({ entity: this.model.modelName, entityId: idOf(doc), operation: "deleted", before: snapshot(doc) });
+  });
+
+  // Model.bulkWrite (e.g. saving a new order): snapshot the records its operations target by _id
+  hooks.pre("bulkWrite", async function (this: any, ops: any[]) {
+    const ctx = activityContext.getStore();
+    if (!ctx || SKIP_MODELS.has(this.modelName) || !Array.isArray(ops)) return;
+    const ids = ops
+      .map((op) => (op.updateOne ?? op.updateMany ?? op.replaceOne ?? op.deleteOne ?? op.deleteMany)?.filter?._id)
+      .filter((id) => typeof id === "string" || id instanceof mongoose.Types.ObjectId)
+      .slice(0, MAX_DOCS_PER_QUERY);
+    if (!ids.length) return;
+    const before = await this.find({ _id: { $in: ids } }).lean();
+    bulkBefore.set(ctx, { model: this.modelName, docs: before });
+  });
+  hooks.post("bulkWrite", async function (this: any) {
+    const ctx = activityContext.getStore();
+    const pending = ctx && bulkBefore.get(ctx);
+    if (!ctx || !pending || pending.model !== this.modelName) return;
+    bulkBefore.delete(ctx);
+    const afterDocs: any[] = await this.find({ _id: { $in: pending.docs.map((d: any) => d._id) } }).lean();
+    const byId = new Map(afterDocs.map((d) => [String(d._id), d]));
+    for (const old of pending.docs) {
+      const now = byId.get(String(old._id));
+      if (!now) {
+        note({ entity: this.modelName, entityId: idOf(old), operation: "deleted", before: snapshot(old) });
+        continue;
+      }
+      const result = diff(snapshot(old), snapshot(now));
+      if (result.changed) note({ entity: this.modelName, entityId: idOf(old), operation: "updated", before: result.old, after: result.now });
+    }
   });
 
   // Model.insertMany

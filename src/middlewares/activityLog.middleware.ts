@@ -18,6 +18,9 @@ import { activityContext, type RecordedChange } from "../config/activityTracker"
  */
 
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+// Reads that take data out of the system (file / CSV / DOCX downloads) are logged too
+const EXPORT_READ = /\/(export|download)(\/|$)|\.(csv|xlsx|docx|pdf)$/i;
+const isLogged = (method: string, apiPath: string) => WRITE_METHODS.has(method) || (method === "GET" && EXPORT_READ.test(apiPath));
 
 // Token housekeeping and the log itself are not admin actions
 const SKIP = [/^\/auth\/refresh-token/, /^\/activity-logs/, /^\/auth\/forgot-password/, /^\/auth\/reset-password/];
@@ -39,13 +42,18 @@ const findAdmin = async (id: string) => {
   return admin;
 };
 
-/** The admin id from req.user (protected routes) or from a valid bearer token (open routes). */
+/**
+ * The admin id from req.user (protected routes) or from the bearer token (open routes).
+ * The token's signature is checked, but an expired one still names the admin: open routes
+ * (gallery, testimonials…) accept the request anyway, and their pages do not refresh the
+ * 15-minute token, so rejecting it would silently drop those actions from the log.
+ */
 const tokenUserId = (req: Request): string | undefined => {
   if (req.user?.id) return req.user.id;
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) return undefined;
   try {
-    return (jwt.verify(header.slice(7), env.ACCESS_TOKEN_SECRET) as JwtPayload).id;
+    return (jwt.verify(header.slice(7), env.ACCESS_TOKEN_SECRET, { ignoreExpiration: true }) as JwtPayload).id;
   } catch {
     return undefined;
   }
@@ -83,6 +91,7 @@ const actionFor = (method: string, apiPath: string): ActivityAction => {
   if (/\/import(\/|$)/.test(p)) return "Imported";
   if (/\/export(\/|$)/.test(p)) return "Exported";
   if (/\/(send|reply|forward|notify)(\/|$)/.test(p)) return "Sent";
+  if (method === "GET") return "Exported";
   if (method === "DELETE") return "Deleted";
   if (method === "PUT" || method === "PATCH") return "Updated";
   return "Created";
@@ -186,8 +195,8 @@ const record = async (req: Request, res: Response, apiPath: string, response: an
 };
 
 export const activityLogger = (req: Request, res: Response, next: NextFunction) => {
-  if (!WRITE_METHODS.has(req.method)) return next();
   const apiPath = req.originalUrl.split("?")[0].replace(/^\/api(\/v1)?/, "") || "/";
+  if (!isLogged(req.method, apiPath)) return next();
   if (SKIP.some((re) => re.test(apiPath))) return next();
 
   const startedAt = Date.now();
@@ -198,9 +207,10 @@ export const activityLogger = (req: Request, res: Response, next: NextFunction) 
     return json(body);
   };
 
-  // Old → new values are only collected for admin requests (bearer token); website forms skip it
+  // Old → new values are only collected for admin writes (bearer token); website forms and
+  // exports (which may load thousands of records) skip it
   const context = { changes: [] as RecordedChange[] };
-  const tracked = Boolean(req.headers.authorization?.startsWith("Bearer "));
+  const tracked = WRITE_METHODS.has(req.method) && Boolean(req.headers.authorization?.startsWith("Bearer "));
 
   res.on("finish", () => {
     record(req, res, apiPath, response, startedAt, context.changes).catch((err) => logger.warn(`Activity log not saved: ${err?.message ?? err}`));

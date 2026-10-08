@@ -57,7 +57,7 @@ export interface IActivityLog extends Document {
 const ActivityLogSchema = new Schema<IActivityLog>(
   {
     userId: { type: String, index: true },
-    userName: { type: String, required: true, trim: true },
+    userName: { type: String, required: true, trim: true, index: true },
     userEmail: { type: String, trim: true },
     userRole: { type: String, trim: true },
     action: { type: String, enum: ACTIVITY_ACTIONS, required: true, index: true },

@@ -49,33 +49,31 @@ export const listActivityLogs = asyncHandler(async (req: Request, res: Response)
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const [items, total, statsAgg, users, modules] = await Promise.all([
+  const count = (where: Record<string, unknown>) => ActivityLog.countDocuments(where);
+
+  const [items, total, statsList, users, modules] = await Promise.all([
     ActivityLog.find(filter)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
       .lean(),
     ActivityLog.countDocuments(filter),
-    ActivityLog.aggregate([
-      {
-        $group: {
-          _id: null,
-          total: { $sum: 1 },
-          today: { $sum: { $cond: [{ $gte: ["$createdAt", today] }, 1, 0] } },
-          created: { $sum: { $cond: [{ $eq: ["$action", "Created"] }, 1, 0] } },
-          updated: { $sum: { $cond: [{ $eq: ["$action", "Updated"] }, 1, 0] } },
-          deleted: { $sum: { $cond: [{ $eq: ["$action", "Deleted"] }, 1, 0] } },
-          logins: { $sum: { $cond: [{ $eq: ["$action", "Login"] }, 1, 0] } },
-          failed: { $sum: { $cond: [{ $eq: ["$status", "Failed"] }, 1, 0] } },
-        },
-      },
+    // Each count uses an index (createdAt / action / status), so the cards stay fast as the log grows
+    Promise.all([
+      ActivityLog.estimatedDocumentCount(),
+      count({ createdAt: { $gte: today } }),
+      count({ action: "Created" }),
+      count({ action: "Updated" }),
+      count({ action: "Deleted" }),
+      count({ action: "Login" }),
+      count({ status: "Failed" }),
     ]),
     ActivityLog.distinct("userName"),
     ActivityLog.distinct("module"),
   ]);
 
-  const stats = statsAgg[0] ?? { total: 0, today: 0, created: 0, updated: 0, deleted: 0, logins: 0, failed: 0 };
-  delete (stats as { _id?: unknown })._id;
+  const [all, todayCount, created, updated, deleted, logins, failed] = statsList;
+  const stats = { total: all, today: todayCount, created, updated, deleted, logins, failed };
 
   res.status(200).json(
     new ApiResponse(200, "Activity logs fetched successfully", {
