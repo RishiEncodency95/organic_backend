@@ -1,5 +1,10 @@
 import mongoose, { Schema } from "mongoose";
 
+// Inbox & Leads values (admin chatbot/inbox)
+export const INBOX_STATUSES = ["New", "In Progress", "Follow-up", "Assigned", "Waiting for Visitor", "Resolved"] as const;
+export const INBOX_PRIORITIES = ["High", "Medium", "Low"] as const;
+export const INBOX_CATEGORIES = ["lead", "enquiry", "support", "feedback", "complaint"] as const;
+
 // One document per website chat session (Organic Mitra chatbot).
 const chatMessageSchema = new Schema(
   {
@@ -52,6 +57,46 @@ const chatSchema = new Schema(
     // 👍 / 👎 on the "Chat ended" screen
     feedback: { type: String, enum: ["yes", "no"] },
     messages: { type: [chatMessageSchema], default: [] },
+    // Questions answered by the AI; without a verified number only FREE_AI_QUESTIONS are allowed
+    aiQuestions: { type: Number, default: 0 },
+    // "manual": an enquiry the team added in Inbox & Leads (phone call, walk-in…), not a website chat
+    source: { type: String, enum: ["chat", "manual"], default: "chat", index: true },
+    manual: {
+      channel: { type: String, trim: true },
+      category: { type: String, enum: INBOX_CATEGORIES },
+      type: { type: String, trim: true },
+      topic: { type: String, trim: true },
+      detail: { type: String, trim: true },
+    },
+    // Team follow-up from Inbox & Leads: owner, status, priority, next follow-up and its history
+    workflow: {
+      assignedTo: { type: String, trim: true },
+      team: { type: String, trim: true },
+      status: { type: String, enum: INBOX_STATUSES },
+      priority: { type: String, enum: INBOX_PRIORITIES },
+      followUpKind: { type: String, enum: ["date", "review", "assign", "none"] },
+      followUpAt: { type: Date },
+      resolvedAt: { type: Date },
+      spam: { type: Boolean },
+      // The visitor's messages up to here have been read in the inbox
+      seenAt: { type: Date },
+      updatedAt: { type: Date },
+      updatedBy: { type: String, trim: true },
+      activity: {
+        type: [
+          new Schema(
+            {
+              kind: { type: String, enum: ["reply", "note", "event"], required: true },
+              text: { type: String, required: true },
+              by: { type: String, trim: true },
+              at: { type: Date, default: Date.now },
+            },
+            { _id: false }
+          ),
+        ],
+        default: undefined,
+      },
+    },
   },
   { timestamps: true }
 );

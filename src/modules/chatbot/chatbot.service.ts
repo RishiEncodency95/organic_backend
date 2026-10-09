@@ -14,7 +14,7 @@ export type ConfigSection = (typeof CONFIG_SECTIONS)[number];
 
 type ManagerAnswer = { question?: string; status?: string; phrases?: string[]; answer?: { en?: string; hi?: string } };
 type ManagerSettings = {
-  identity?: { name?: string; subtitle?: string; launcher?: string };
+  identity?: { name?: string; subtitle?: string; launcher?: string; avatar?: string };
   enabled?: boolean;
   languages?: string[];
   defaultLang?: string;
@@ -37,7 +37,7 @@ export const getConfigDoc = async () =>
   ChatbotConfig.findOneAndUpdate({ key: "main" }, { $setOnInsert: { key: "main" } }, { upsert: true, returnDocument: "after", setDefaultsOnInsert: true });
 
 // The website asks for the live context on every message — cache it briefly
-let liveCache: { at: number; ctx: BotContext; settings: ManagerSettings } | null = null;
+let liveCache: { at: number; ctx: BotContext; settings: ManagerSettings; data: ConfigData } | null = null;
 const LIVE_CACHE_MS = 30_000;
 export const clearLiveCache = () => {
   liveCache = null;
@@ -57,7 +57,7 @@ const toContext = (data: ConfigData, sources: { name: string; topic?: string; co
 };
 
 /** What the bot knows: "live" = published (website), "draft" = everything being edited (admin tests) */
-export const getBotContext = async (mode: "live" | "draft" = "live"): Promise<{ ctx: BotContext; settings: ManagerSettings }> => {
+export const getBotContext = async (mode: "live" | "draft" = "live"): Promise<{ ctx: BotContext; settings: ManagerSettings; data: ConfigData }> => {
   if (mode === "live" && liveCache && Date.now() - liveCache.at < LIVE_CACHE_MS) return liveCache;
   const doc = await getConfigDoc();
   const data = ((mode === "live" ? doc.published : doc.draft) || {}) as ConfigData;
@@ -71,22 +71,122 @@ export const getBotContext = async (mode: "live" | "draft" = "live"): Promise<{ 
     topic: s.topic,
     content: (mode === "draft" && s.pendingContent ? s.pendingContent : s.content) || "",
   }));
-  const result = { ctx: toContext(data, sources), settings: (data.settings || {}) as ManagerSettings };
+  const result = { ctx: toContext(data, sources), settings: (data.settings || {}) as ManagerSettings, data };
   if (mode === "live") liveCache = { at: Date.now(), ...result };
   return result;
 };
 
-/** Published settings the website chat needs (name, greetings, on/off) */
+// ─── What the website reads from the published Manager sections ──────────────
+
+type ManagerButton = {
+  label?: string;
+  hindi?: string;
+  action?: string;
+  active?: boolean;
+  reply?: string;
+  options?: string[];
+  target?: string;
+};
+type ManagerField = { label?: string; required?: boolean; show?: boolean };
+type ManagerForm = {
+  active?: boolean;
+  fields?: ManagerField[];
+  submission?: { submitLabel?: string; consent?: string; confirmation?: string; recordType?: string; topic?: string };
+  routing?: { team?: string; priority?: string; target?: string; escalate?: string };
+};
+
+const BUTTON_ACTIONS = ["Show Options", "Show Answer", "Open Form", "Open Link", "Talk to Team"];
+const clip = (value: unknown, max: number) => (typeof value === "string" ? value.trim().slice(0, max) : "");
+
+/** Active main-menu buttons in the Manager's order, or null while the section was never published */
+const publicButtons = (raw: unknown) => {
+  if (!Array.isArray(raw)) return null;
+  return (raw as ManagerButton[])
+    .filter((b) => b && b.active !== false && clip(b.label, 60) && BUTTON_ACTIONS.includes(String(b.action)))
+    .slice(0, 12)
+    .map((b) => ({
+      label: clip(b.label, 60),
+      hindi: clip(b.hindi, 60),
+      action: String(b.action),
+      reply: clip(b.reply, 600),
+      options: (b.options || []).map((o) => clip(o, 60)).filter(Boolean).slice(0, 8),
+      target: clip(b.target, 300),
+    }));
+};
+
+/** The website's two chat forms as the Manager set them up (only what the website can use) */
+const publicForms = (raw: unknown) => {
+  if (!raw || typeof raw !== "object") return null;
+  const forms = raw as Record<string, ManagerForm>;
+  const pick = (name: string) => {
+    const f = forms[name];
+    if (!f) return undefined;
+    const field = (label: RegExp) => {
+      const found = (f.fields || []).find((x) => label.test(x.label || ""));
+      return found ? { show: found.show !== false, required: !!found.required } : undefined;
+    };
+    return {
+      active: f.active !== false,
+      submitLabel: clip(f.submission?.submitLabel, 40),
+      consent: clip(f.submission?.consent, 200),
+      confirmation: clip(f.submission?.confirmation, 300),
+      company: field(/company/i),
+      email: field(/e-?mail/i),
+      time: field(/time/i),
+    };
+  };
+  return { quote: pick("Quotation Request"), callback: pick("Callback Request") };
+};
+
+/** Published Manager sections and settings (cached with the live bot context) */
+const getLiveData = async () => {
+  const { settings, data } = await getBotContext("live");
+  return { settings, data };
+};
+
+/** Published settings the website chat needs (name, avatar, greetings, menu buttons, forms, on/off) */
 export const getPublicSettings = async () => {
-  const { settings } = await getBotContext("live");
+  const { settings, data } = await getLiveData();
   return {
     enabled: settings.enabled !== false,
     name: settings.identity?.name || "",
     subtitle: settings.identity?.subtitle || "",
     launcher: settings.identity?.launcher || "",
+    avatar: /^https?:\/\//.test(settings.identity?.avatar || "") ? settings.identity!.avatar : "",
     defaultLanguage: settings.defaultLang || "",
     messages: settings.messages || null,
     outsideHours: settings.team?.outside || "",
+    buttons: publicButtons(data.buttons),
+    forms: publicForms(data.forms),
+  };
+};
+
+/** "30 minutes" / "1 working hour" / "4 working hours" / "1 working day" → milliseconds */
+const targetMs = (target?: string) => {
+  const t = (target || "").toLowerCase();
+  const n = parseFloat(t) || 1;
+  if (t.includes("minute")) return n * 60_000;
+  if (t.includes("day")) return n * 24 * 3_600_000;
+  return n * 3_600_000;
+};
+
+const ROUTED_FORM: Record<string, string> = { "stall-quotation": "Quotation Request", "sales-callback": "Callback Request" };
+
+/**
+ * Team, priority and first follow-up time for a chat request, from the published
+ * Forms & Routing settings (Sales Team / High / 30 minutes when nothing is published).
+ */
+export const routingFor = async (requestType: string) => {
+  const { data } = await getLiveData();
+  const forms = (data.forms || {}) as Record<string, ManagerForm>;
+  const routing = forms[ROUTED_FORM[requestType]]?.routing || {};
+  const priority = routing.priority === "Urgent" ? "High" : ["High", "Medium", "Low"].includes(String(routing.priority)) ? String(routing.priority) : "High";
+  return {
+    form: ROUTED_FORM[requestType] || "Chat request",
+    team: routing.team || "Sales Team",
+    priority,
+    target: routing.target || "30 minutes",
+    followUpAt: new Date(Date.now() + targetMs(routing.target || "30 minutes")),
   };
 };
 

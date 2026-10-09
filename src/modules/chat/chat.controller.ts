@@ -10,7 +10,9 @@ import { logger } from "../../utils/logger";
 import { env } from "../../config/env";
 import { sendWhatsAppTemplate } from "../../services/whatsapp.service";
 import { buildInstructions, FALLBACK_REPLY, NO_ANSWER_MARKER } from "./chat.prompt";
-import { getBotContext, getOpenAI } from "../chatbot/chatbot.service";
+import { getBotContext, getOpenAI, routingFor } from "../chatbot/chatbot.service";
+import ChatbotConfig from "../../models/chat/ChatbotConfig.model";
+import ExhibitorRegistration from "../../models/expo/ExhibitorRegistration.model";
 import { toTenDigitMobile } from "./chat.schema";
 
 const HISTORY_LIMIT = 10;
@@ -199,6 +201,35 @@ export const startChat = asyncHandler(async (req: Request, res: Response) => {
   );
   if (proof) await Otp.deleteOne({ _id: proof._id });
 
+  // A quotation / callback request goes to the team set in the Manager's Forms & Routing, with
+  // its priority and a first follow-up due by the form's response target
+  if (request) {
+    const route = await routingFor(request.type);
+    const routed = await Chat.findOne({ sessionId }).select("workflow.status workflow.assignedTo").lean<any>();
+    const reopen = !routed?.workflow?.status || routed.workflow.status === "Resolved";
+    await Chat.updateOne(
+      { sessionId },
+      {
+        $set: {
+          "workflow.team": route.team,
+          "workflow.priority": route.priority,
+          "workflow.followUpKind": "date",
+          "workflow.followUpAt": route.followUpAt,
+          "workflow.updatedAt": new Date(),
+          ...(reopen ? { "workflow.status": "New", "workflow.assignedTo": routed?.workflow?.assignedTo || "Unassigned" } : {}),
+        },
+        $unset: { "workflow.resolvedAt": "" },
+        $push: {
+          "workflow.activity": {
+            $each: [{ kind: "event", text: `${route.form} from the website — routed to ${route.team} (${route.priority}, reply within ${route.target})`, by: "Organic Mitra", at: new Date() }],
+            $slice: -200,
+          },
+        },
+      },
+      { timestamps: false }
+    );
+  }
+
   notifyOnWhatsApp(sessionId, lead, pageUrl, request).catch((error) =>
     logger.warn(`Chatbot WhatsApp notification failed: ${error?.message}`)
   );
@@ -226,7 +257,8 @@ export const getChatHistory = asyncHandler(async (req: Request, res: Response) =
     throw ApiError.badRequest("Please verify with OTP to view your previous enquiry.");
   }
 
-  const chats = await Chat.find(phone ? { "lead.phone": phone } : { "lead.email": email })
+  // Enquiries the team added by hand are internal records, not the visitor's own chats
+  const chats = await Chat.find({ ...(phone ? { "lead.phone": phone } : { "lead.email": email }), source: { $ne: "manual" } })
     .sort({ updatedAt: -1 })
     .limit(HISTORY_RESULTS)
     .select("lead.name requests messages createdAt updatedAt")
@@ -245,6 +277,9 @@ export const getChatHistory = asyncHandler(async (req: Request, res: Response) =
   res.status(200).json(ApiResponse.ok("Previous chats", history));
 });
 
+/** AI questions a visitor may ask before sharing name + mobile (same as the website FREE_QUESTIONS) */
+const FREE_AI_QUESTIONS = 3;
+
 // POST /api/chat — streams the assistant reply as Server-Sent Events
 export const sendChatMessage = asyncHandler(async (req: Request, res: Response) => {
   const sessionId = String(req.body.sessionId).trim();
@@ -255,8 +290,15 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
 
   // Visitors chat freely: until the mobile number is verified the chat is saved as "Visitor <ip>"
   const chat = await Chat.findOne({ sessionId })
-    .select({ lead: 1, enquiryId: 1, messages: { $slice: -HISTORY_LIMIT } })
-    .lean();
+    .select({ lead: 1, enquiryId: 1, aiQuestions: 1, messages: { $slice: -HISTORY_LIMIT } })
+    .lean<any>();
+
+  // A few questions are free; after that the website asks for name + mobile (OTP) first.
+  // Checked here too, so reloading the page or clearing the browser does not reset it.
+  if (!chat?.lead?.phone && (chat?.aiQuestions || 0) >= FREE_AI_QUESTIONS) {
+    res.status(403).json({ success: false, code: "DETAILS_REQUIRED", message: "Please share your name and mobile number to continue the chat." });
+    return;
+  }
   const { ctx, settings } = await getBotContext("live");
   if (settings.enabled === false) {
     throw new ApiError(503, "The chat assistant is switched off right now.");
@@ -315,7 +357,7 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
         model,
         instructions: buildInstructions(chat?.lead?.name || undefined, ctx),
         input: [
-          ...context.map((m) => ({ role: m.role, content: m.content })),
+          ...context.map((m: { role: "user" | "assistant"; content: string }) => ({ role: m.role, content: m.content })),
           { role: "user" as const, content: message },
         ],
         max_output_tokens: 800,
@@ -361,6 +403,8 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
       {
         $push: { messages: { $each: toSave } },
         $set: { visitor, ...(pageUrl ? { pageUrl } : {}) },
+        // Only an answered question uses up one of the free questions
+        ...(replyText ? { $inc: { aiQuestions: 1 } } : {}),
         $setOnInsert: { visitorName },
       },
       { upsert: true }
@@ -384,7 +428,8 @@ const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$
 
 /** Chats started between ?from and ?to (ISO dates), optionally matching ?search. */
 const buildChatFilter = (query: Request["query"]) => {
-  const filter: Record<string, any> = {};
+  // ?source=all also returns enquiries added by hand in Inbox & Leads
+  const filter: Record<string, any> = query.source === "all" ? {} : { source: { $ne: "manual" } };
   const from = query.from ? new Date(String(query.from)) : null;
   const to = query.to ? new Date(String(query.to)) : null;
   if ((from && Number.isNaN(from.getTime())) || (to && Number.isNaN(to.getTime()))) {
@@ -439,6 +484,9 @@ export const getRecentChats = asyncHandler(async (req: Request, res: Response) =
               pageUrl: 1,
               enquiryId: 1,
               whatsappSentAt: 1,
+              source: 1,
+              manual: 1,
+              workflow: 1,
               createdAt: 1,
               updatedAt: 1,
               messageCount: { $size: "$messages" },
@@ -454,9 +502,28 @@ export const getRecentChats = asyncHandler(async (req: Request, res: Response) =
   ]);
 
   const total = result?.total?.[0]?.count || 0;
+  const chats: any[] = result?.chats || [];
+
+  // Stand bookings (Book a Stand) made with a lead's mobile number: "confirmed" once paid
+  const phones = [...new Set(chats.map((c) => c.lead?.phone).filter(Boolean))] as string[];
+  if (phones.length) {
+    const formats = phones.flatMap((p) => [p, `91${p}`, `+91${p}`, `+91 ${p}`, `0${p}`]);
+    const bookings = await ExhibitorRegistration.find({ mobile: { $in: formats } }).select("mobile paymentStatus status").lean<any[]>();
+    const byPhone = new Map<string, { status: string; paid: boolean }>();
+    for (const b of bookings) {
+      const key = String(b.mobile).replace(/\D/g, "").slice(-10);
+      const paid = b.paymentStatus === "paid";
+      if (!byPhone.get(key)?.paid) byPhone.set(key, { status: paid ? "confirmed" : b.status || "pending", paid });
+    }
+    for (const c of chats) {
+      const booking = c.lead?.phone && byPhone.get(c.lead.phone);
+      if (booking) c.booking = booking;
+    }
+  }
+
   res.status(200).json(
     ApiResponse.ok("Chats fetched successfully", {
-      chats: result?.chats || [],
+      chats,
       total,
       page,
       limit,
@@ -533,8 +600,28 @@ export const getChatStats = asyncHandler(async (req: Request, res: Response) => 
     },
   ]);
 
+  // Team follow-up: the current queue (every record, whatever the date range), spam left out
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+  const open = { "workflow.spam": { $ne: true }, "workflow.status": { $ne: "Resolved" } };
+  // Filters on nested workflow paths (Mongoose types only know the top-level fields)
+  const count = (where: Record<string, unknown>) => Chat.countDocuments(where as Record<string, never>);
+  const [unassigned, overdue, dueToday, openComplaints, config] = await Promise.all([
+    count({ ...open, $or: [{ "lead.phone": { $nin: [null, ""] } }, { source: "manual" }, { "requests.0": { $exists: true } }], "workflow.assignedTo": { $in: [null, "", "Unassigned"] } }),
+    count({ ...open, "workflow.followUpKind": "date", "workflow.followUpAt": { $lt: now } }),
+    count({ ...open, "workflow.followUpKind": "date", "workflow.followUpAt": { $gte: now, $lt: todayEnd } }),
+    count({ ...open, "manual.category": "complaint" }),
+    ChatbotConfig.findOne({ key: "main" }).select("versions.date updatedAt").lean<any>(),
+  ]);
+  const versions = config?.versions || [];
+  const contentUpdatedAt = versions.length ? versions[versions.length - 1].date : null;
+
   res.status(200).json(
     ApiResponse.ok("Chat stats fetched successfully", {
+      followUp: { unassigned, overdue, dueToday, openComplaints },
+      contentUpdatedAt,
       totals: {
         ...(result?.totals?.[0] || {
           chats: 0,

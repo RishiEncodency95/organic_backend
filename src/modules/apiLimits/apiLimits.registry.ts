@@ -45,7 +45,8 @@ export const PROTECTED_APIS: ProtectedApi[] = [
   // Every form above verifies by OTP first, so the OTP rules allow a few more sends
   { key: "phone-otp", label: "Phone OTP (WhatsApp)", method: "POST", paths: [/^\/(website\/)?verify\/send-phone-otp\/?$/], display: "/verify/send-phone-otp", maxAttempts: 5, blockHours: DEFAULT_HOURS },
   { key: "email-otp", label: "Email OTP", method: "POST", paths: [/^\/(website\/)?verify\/send-email-otp\/?$/], display: "/verify/send-email-otp", maxAttempts: 5, blockHours: DEFAULT_HOURS },
-  { key: "chat-lead", label: "Chatbot Lead", method: "POST", paths: [/^\/chat\/lead\/?$/], display: "/chat/lead", maxAttempts: 3, blockHours: DEFAULT_HOURS },
+  // One visitor can send the details form, a quotation and a callback in one chat
+  { key: "chat-lead", label: "Chatbot Lead", method: "POST", paths: [/^\/chat\/lead\/?$/], display: "/chat/lead", maxAttempts: 5, blockHours: DEFAULT_HOURS },
 ];
 
 export const findProtectedApi = (method: string, apiPath: string) =>

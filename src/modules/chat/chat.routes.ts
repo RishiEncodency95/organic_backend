@@ -5,6 +5,7 @@ import { chatLimiter, chatLeadLimiter, chatHistoryLimiter, chatTrackLimiter } fr
 import { validateRequest } from "../../middlewares/validate.middleware";
 import { chatHistorySchema, chatLeadSchema, chatMessageSchema, chatTrackSchema } from "./chat.schema";
 import { startChat, trackChat, sendChatMessage, getChatHistory, getRecentChats, getChatStats, getChatById } from "./chat.controller";
+import { createManualEnquiry, saveInboxWorkflow } from "./inbox.controller";
 
 const router = Router();
 
@@ -18,6 +19,10 @@ router.post("/chat", chatLimiter, validateRequest(chatMessageSchema), sendChatMe
 const canView = [protect, requirePermission("perm_enquiries_view")];
 router.get("/admin/chats", ...canView, getRecentChats);
 router.get("/admin/chats/stats", ...canView, getChatStats);
+// Inbox & Leads: follow-up state and enquiries added by hand
+const canEdit = [protect, requirePermission("perm_enquiries_reply")];
+router.put("/admin/chats/workflow", ...canEdit, saveInboxWorkflow);
+router.post("/admin/chats/manual", ...canEdit, createManualEnquiry);
 router.get("/admin/chats/:id", ...canView, getChatById);
 
 export default router;
