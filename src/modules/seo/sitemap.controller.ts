@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import BlogPost from "../../models/blog/blogPost.model";
+import { liveBlogFilter } from "../blogPost/blogPost.service";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://bharatorganicexpo.com";
 
@@ -71,7 +72,7 @@ export async function generateSitemapXml(_req: Request, res: Response) {
 
     // 2. Fetch published blog posts from DB
     const blogs = await BlogPost.find(
-      { status: { $in: ["published", "scheduled"] } },
+      liveBlogFilter(),
       { slug: 1, updatedAt: 1, publishDate: 1 }
     ).lean();
 

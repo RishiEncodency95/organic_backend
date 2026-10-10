@@ -6,6 +6,7 @@ import { Admin } from "../../models/Admin.model";
 import asyncHandler from "../../utils/asyncHandler";
 import { ApiError } from "../../utils/ApiError";
 import { ApiResponse } from "../../utils/ApiResponse";
+import { notifyAssignment, routeEnquiry } from "./enquiryRouting.service";
 
 /*
  * Inbox & Leads (admin chatbot/inbox): the team's follow-up on each chat — owner, status,
@@ -110,7 +111,14 @@ export const createManualEnquiry = asyncHandler(async (req: Request, res: Respon
   const category = oneOf(body.category, INBOX_CATEGORIES, "category") ?? "enquiry";
   const by = await adminName(req);
 
-  const assignedTo = text(body.assignedTo, 80) || "Unassigned";
+  // No owner chosen: Notification Settings (once saved) pick the team and employee
+  const chosen = text(body.assignedTo, 80);
+  const topic = text(body.topic, 80);
+  const routed =
+    !chosen || chosen === "Unassigned"
+      ? await routeEnquiry({ text: `${topic} ${text(body.type, 40)} ${category === "complaint" ? "complaint" : ""}`, phone: mobile || undefined })
+      : null;
+  const assignedTo = chosen && chosen !== "Unassigned" ? chosen : routed?.owner || "Unassigned";
   const followUpAt = date(body.followUpAt, "follow-up date");
   const chat = await Chat.create({
     sessionId: `manual-${randomUUID()}`,
@@ -126,16 +134,21 @@ export const createManualEnquiry = asyncHandler(async (req: Request, res: Respon
     },
     workflow: {
       assignedTo,
-      team: text(body.team, 80) || undefined,
+      team: text(body.team, 80) || routed?.team || undefined,
+      rule: routed?.rule,
       status: assignedTo === "Unassigned" ? "New" : "Assigned",
       priority: oneOf(body.priority, INBOX_PRIORITIES, "priority") ?? "Medium",
       followUpKind: followUpAt ? "date" : assignedTo === "Unassigned" ? "assign" : "review",
       followUpAt,
       updatedAt: new Date(),
       updatedBy: by,
-      activity: [{ kind: "event", text: `Created manually from ${text(body.source, 40) || "Phone call"}`, by, at: new Date() }],
+      activity: [
+        { kind: "event", text: `Created manually from ${text(body.source, 40) || "Phone call"}`, by, at: new Date() },
+        ...(routed && routed.owner !== "Unassigned" ? [{ kind: "event", text: `Assigned to ${routed.owner} (${routed.note})`, by: "Notification Settings", at: new Date() }] : []),
+      ],
     },
   });
+  if (routed && routed.owner !== "Unassigned") notifyAssignment(routed.owner, { name, phone: mobile, topic: routed.rule || topic || "Enquiry" }, { _id: chat._id }).catch(() => {});
 
   res.status(201).json(ApiResponse.created("Enquiry created", { id: String(chat._id), createdAt: chat.createdAt }));
 });

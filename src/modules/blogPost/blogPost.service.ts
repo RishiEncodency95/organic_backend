@@ -11,12 +11,33 @@ interface GetBlogsFilter {
   limit?: number;
 }
 
+/** Posts visitors may see: published, or scheduled with their scheduled (else publish) date reached */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- a nested filter Mongoose types cannot express
+export const liveBlogFilter = (now = new Date()): Record<string, any> => ({
+  $or: [
+    { status: "published" },
+    {
+      status: "scheduled",
+      $or: [{ scheduledDate: { $lte: now } }, { scheduledDate: null, publishDate: { $lte: now } }],
+    },
+  ],
+});
+
+/** Same rule as liveBlogFilter, for one post already loaded */
+export const isBlogLive = (post: { status?: string; scheduledDate?: Date | null; publishDate?: Date | null }, now = new Date()) => {
+  if (post.status === "published") return true;
+  if (post.status !== "scheduled") return false;
+  const goLive = post.scheduledDate || post.publishDate;
+  return !!goLive && new Date(goLive) <= now;
+};
+
 export const getBlogPostsService = async (filters: GetBlogsFilter = {}) => {
   const query: any = {};
 
   if (filters.status && filters.status !== "all") {
     if (filters.status === "published") {
-      query.status = { $in: ["published", "scheduled"] };
+      // A scheduled post goes live only once its date has come
+      query.$and = [liveBlogFilter()];
     } else {
       query.status = filters.status;
     }

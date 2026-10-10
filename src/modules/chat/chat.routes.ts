@@ -6,6 +6,7 @@ import { validateRequest } from "../../middlewares/validate.middleware";
 import { chatHistorySchema, chatLeadSchema, chatMessageSchema, chatTrackSchema } from "./chat.schema";
 import { startChat, trackChat, sendChatMessage, getChatHistory, getRecentChats, getChatStats, getChatById } from "./chat.controller";
 import { createManualEnquiry, saveInboxWorkflow } from "./inbox.controller";
+import { getRoutingSettingsAdmin, saveRoutingSettings } from "./routingSettings.controller";
 
 const router = Router();
 
@@ -23,6 +24,9 @@ router.get("/admin/chats/stats", ...canView, getChatStats);
 const canEdit = [protect, requirePermission("perm_enquiries_reply")];
 router.put("/admin/chats/workflow", ...canEdit, saveInboxWorkflow);
 router.post("/admin/chats/manual", ...canEdit, createManualEnquiry);
+// Notification Settings: assignment rules and team alerts
+router.get("/admin/chats/routing", ...canView, getRoutingSettingsAdmin);
+router.put("/admin/chats/routing", ...canEdit, saveRoutingSettings);
 router.get("/admin/chats/:id", ...canView, getChatById);
 
 export default router;

@@ -33,6 +33,7 @@ import {
 import { uploadCvMiddleware } from "../middlewares/uploadCv.middleware";
 import { uploadPhotoMiddleware } from "../middlewares/uploadPhoto.middleware";
 import { protect } from "../middlewares/auth.middleware";
+import { getCareerDashboard, trackCareerEvent } from "../modules/careers/careerDashboard.controller";
 
 const router = Router();
 
@@ -50,6 +51,8 @@ router.patch("/candidates/:id", updateCandidateProfile);
 router.post("/candidates/:id/photo", uploadPhotoMiddleware.any(), uploadCandidatePhoto);
 
 router.get("/options", getCareerOptions);
+// Careers page views / job views / apply clicks for the admin Careers Dashboard
+router.post("/track", trackCareerEvent);
 // Messages shown on the eligibility result (edited in admin Career Settings → Result Messages)
 router.get("/result-messages", getResultMessages);
 
@@ -59,6 +62,7 @@ router.patch("/applications/:id", updateApplication);
 router.post("/applications/:id/submit", submitApplication);
 
 // ADMIN CAREERS APIS
+router.get("/admin/dashboard", protect, getCareerDashboard);
 router.get("/admin/jobs", protect, getAdminJobsList);
 router.get("/admin/jobs/:id", protect, getAdminJobById);
 router.get("/admin/jobs/:id/export", protect, exportAdminJobDocx);

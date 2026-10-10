@@ -11,6 +11,7 @@ import { env } from "../../config/env";
 import { sendWhatsAppTemplate } from "../../services/whatsapp.service";
 import { buildInstructions, FALLBACK_REPLY, NO_ANSWER_MARKER } from "./chat.prompt";
 import { getBotContext, getOpenAI, routingFor } from "../chatbot/chatbot.service";
+import { notifyAssignment, routeEnquiry } from "./enquiryRouting.service";
 import ChatbotConfig from "../../models/chat/ChatbotConfig.model";
 import ExhibitorRegistration from "../../models/expo/ExhibitorRegistration.model";
 import { toTenDigitMobile } from "./chat.schema";
@@ -207,27 +208,37 @@ export const startChat = asyncHandler(async (req: Request, res: Response) => {
     const route = await routingFor(request.type);
     const routed = await Chat.findOne({ sessionId }).select("workflow.status workflow.assignedTo").lean<any>();
     const reopen = !routed?.workflow?.status || routed.workflow.status === "Resolved";
+    const owner = routed?.workflow?.assignedTo || "Unassigned";
+    // Notification Settings (once saved) pick the team and, for an enquiry nobody owns yet, the employee
+    const rule = await routeEnquiry({ text: `stall booking ${request.type.replace(/-/g, " ")}`, phone: lead.phone, chatId: routed?._id });
+    const team = rule?.team || route.team;
+    const assign = reopen && owner === "Unassigned" && rule && rule.owner !== "Unassigned" ? rule.owner : null;
     await Chat.updateOne(
       { sessionId },
       {
         $set: {
-          "workflow.team": route.team,
+          "workflow.team": team,
           "workflow.priority": route.priority,
           "workflow.followUpKind": "date",
           "workflow.followUpAt": route.followUpAt,
           "workflow.updatedAt": new Date(),
-          ...(reopen ? { "workflow.status": "New", "workflow.assignedTo": routed?.workflow?.assignedTo || "Unassigned" } : {}),
+          ...(rule?.rule ? { "workflow.rule": rule.rule } : {}),
+          ...(reopen ? { "workflow.status": assign ? "Assigned" : "New", "workflow.assignedTo": assign || owner } : {}),
         },
-        $unset: { "workflow.resolvedAt": "" },
+        $unset: { "workflow.resolvedAt": "", "workflow.escalatedAt": "" },
         $push: {
           "workflow.activity": {
-            $each: [{ kind: "event", text: `${route.form} from the website — routed to ${route.team} (${route.priority}, reply within ${route.target})`, by: "Organic Mitra", at: new Date() }],
+            $each: [
+              { kind: "event", text: `${route.form} from the website — routed to ${team} (${route.priority}, reply within ${route.target})`, by: "Organic Mitra", at: new Date() },
+              ...(assign ? [{ kind: "event", text: `Assigned to ${assign} (${rule?.note})`, by: "Notification Settings", at: new Date() }] : []),
+            ],
             $slice: -200,
           },
         },
       },
       { timestamps: false }
     );
+    if (assign) notifyAssignment(assign, { name: lead.name, phone: lead.phone, topic: rule?.rule || route.form }, { sessionId }).catch(() => {});
   }
 
   notifyOnWhatsApp(sessionId, lead, pageUrl, request).catch((error) =>

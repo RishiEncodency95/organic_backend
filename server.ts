@@ -6,6 +6,7 @@ import { env } from "./src/config/env";
 import { logger } from "./src/utils/logger";
 import { autoSeedSuperAdmin } from "./src/utils/autoSeed";
 import { seedSystemServicesIfEmpty } from "./src/modules/systemServices/systemServices.service";
+import { startEnquirySweep } from "./src/modules/chat/enquiryRouting.service";
 
 const startServer = async (): Promise<void> => {
   try {
@@ -14,6 +15,8 @@ const startServer = async (): Promise<void> => {
     await connectRedis();
     await autoSeedSuperAdmin();
     await seedSystemServicesIfEmpty();
+    // Notification Settings: reassign / report enquiries not answered in time
+    startEnquirySweep();
 
     const server = app.listen(env.PORT, () => {
       // ─── Startup Status ───────────────────────────────

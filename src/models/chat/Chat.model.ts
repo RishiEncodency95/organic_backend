@@ -82,6 +82,9 @@ const chatSchema = new Schema(
       seenAt: { type: Date },
       updatedAt: { type: Date },
       updatedBy: { type: String, trim: true },
+      // Notification Settings rule that routed it, and when its overdue handling ran
+      rule: { type: String, trim: true },
+      escalatedAt: { type: Date },
       activity: {
         type: [
           new Schema(
