@@ -84,8 +84,16 @@ export const streamPdf = asyncHandler(async (req: Request, res: Response) => {
     throw ApiError.notFound("PDF not found.");
   }
 
+  // ?download=1 saves the file instead of opening it; ?name= gives it a readable file name
+  const wanted = String(req.query.name || "")
+    .replace(/\.pdf$/i, "")
+    .replace(/[^\w .()&-]+/g, "")
+    .trim()
+    .slice(0, 100);
+  const fileName = wanted ? `${wanted}.pdf` : asset.fileName.replace(/"/g, "");
+  const disposition = req.query.download === "1" ? "attachment" : "inline";
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `inline; filename="${asset.fileName.replace(/"/g, "")}"`);
+  res.setHeader("Content-Disposition", `${disposition}; filename="${fileName}"`);
   res.setHeader("Cache-Control", "public, max-age=86400");
   const length = upstream.headers.get("content-length");
   if (length) res.setHeader("Content-Length", length);
