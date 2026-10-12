@@ -8,6 +8,7 @@ import { ApiError } from "../../utils/ApiError";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { logger } from "../../utils/logger";
 import { env } from "../../config/env";
+import { otpProofRequired } from "../../utils/otpProof";
 import { sendWhatsAppTemplate } from "../../services/whatsapp.service";
 import { buildInstructions, FALLBACK_REPLY, NO_ANSWER_MARKER } from "./chat.prompt";
 import { getBotContext, getOpenAI, routingFor } from "../chatbot/chatbot.service";
@@ -21,6 +22,9 @@ const WHATSAPP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const DUPLICATE_ENQUIRY_MS = 24 * 60 * 60 * 1000;
 const CHATBOT_SERVICE = "Chatbot (Organic Mitra)";
 const NO_QUESTION_PREFIX = "Started a chat with Organic Mitra on";
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 
 /** The visitor's IP and browser; a chat is saved as "Visitor <ip>" until the mobile number is verified */
@@ -130,6 +134,47 @@ const notifyOnWhatsApp = async (
   }
 };
 
+/**
+ * Sends a quotation / callback request to the team set in the Manager's Forms & Routing, with its
+ * priority and a first follow-up due by the form's response target. Notification Settings (once
+ * saved) pick the team and, for an enquiry nobody owns yet, the employee.
+ */
+const routeRequest = async (sessionId: string, lead: { name: string; phone: string }, request: ChatRequest) => {
+  const route = await routingFor(request.type);
+  const routed = await Chat.findOne({ sessionId }).select("workflow.status workflow.assignedTo").lean<any>();
+  const reopen = !routed?.workflow?.status || routed.workflow.status === "Resolved";
+  const owner = routed?.workflow?.assignedTo || "Unassigned";
+  const rule = await routeEnquiry({ text: `stall booking ${request.type.replace(/-/g, " ")}`, phone: lead.phone, chatId: routed?._id });
+  const team = rule?.team || route.team;
+  const assign = reopen && owner === "Unassigned" && rule && rule.owner !== "Unassigned" ? rule.owner : null;
+  await Chat.updateOne(
+    { sessionId },
+    {
+      $set: {
+        "workflow.team": team,
+        "workflow.priority": route.priority,
+        "workflow.followUpKind": "date",
+        "workflow.followUpAt": route.followUpAt,
+        "workflow.updatedAt": new Date(),
+        ...(rule?.rule ? { "workflow.rule": rule.rule } : {}),
+        ...(reopen ? { "workflow.status": assign ? "Assigned" : "New", "workflow.assignedTo": assign || owner } : {}),
+      },
+      $unset: { "workflow.resolvedAt": "", "workflow.escalatedAt": "" },
+      $push: {
+        "workflow.activity": {
+          $each: [
+            { kind: "event", text: `${route.form} from the website — routed to ${team} (${route.priority}, reply within ${route.target})`, by: "Organic Mitra", at: new Date() },
+            ...(assign ? [{ kind: "event", text: `Assigned to ${assign} (${rule?.note})`, by: "Notification Settings", at: new Date() }] : []),
+          ],
+          $slice: -200,
+        },
+      },
+    },
+    { timestamps: false }
+  );
+  if (assign) notifyAssignment(assign, { name: lead.name, phone: lead.phone, topic: rule?.rule || route.form }, { sessionId }).catch(() => {});
+};
+
 /** Must match LEAD_OTP_PROFILE in the website's chat panel */
 export const CHAT_LEAD_OTP_PROFILE = "CHAT_LEAD";
 
@@ -151,17 +196,18 @@ export const startChat = asyncHandler(async (req: Request, res: Response) => {
       }
     : null;
 
-  const existing = await Chat.findOne({ sessionId }).select("enquiryId lead.phone").lean();
+  const existing = await Chat.findOne({ sessionId }).select("enquiryId lead.phone phoneVerifiedAt").lean();
 
   // The details, quotation and callback forms prove the visitor owns this number with a WhatsApp
   // OTP, verified in the browser; here the server confirms (and consumes) the verified record.
-  // Not asked again when this chat already has the same number. Outside production the dev
-  // master OTP verifies without a record, so the check is skipped there.
-  const newNumber = existing?.lead?.phone !== lead.phone;
+  // Not asked again when this chat already has the same number. Only when otpProofRequired()
+  // (see otpProof.ts).
+  // A number only typed in the chat (not verified) still needs the OTP proof
+  const newNumber = existing?.lead?.phone !== lead.phone || !existing?.phoneVerifiedAt;
   // Used up only after the lead is saved, so a retry after a failed save still works
   const proof = newNumber ? await Otp.findOne({ phone: lead.phone, isVerified: true, profile: CHAT_LEAD_OTP_PROFILE }).select("_id").lean() : null;
   if (newNumber) {
-    if (!proof && env.NODE_ENV === "production") {
+    if (!proof && otpProofRequired()) {
       throw ApiError.badRequest("Please verify your mobile number with the WhatsApp OTP.");
     }
   }
@@ -202,44 +248,8 @@ export const startChat = asyncHandler(async (req: Request, res: Response) => {
   );
   if (proof) await Otp.deleteOne({ _id: proof._id });
 
-  // A quotation / callback request goes to the team set in the Manager's Forms & Routing, with
-  // its priority and a first follow-up due by the form's response target
-  if (request) {
-    const route = await routingFor(request.type);
-    const routed = await Chat.findOne({ sessionId }).select("workflow.status workflow.assignedTo").lean<any>();
-    const reopen = !routed?.workflow?.status || routed.workflow.status === "Resolved";
-    const owner = routed?.workflow?.assignedTo || "Unassigned";
-    // Notification Settings (once saved) pick the team and, for an enquiry nobody owns yet, the employee
-    const rule = await routeEnquiry({ text: `stall booking ${request.type.replace(/-/g, " ")}`, phone: lead.phone, chatId: routed?._id });
-    const team = rule?.team || route.team;
-    const assign = reopen && owner === "Unassigned" && rule && rule.owner !== "Unassigned" ? rule.owner : null;
-    await Chat.updateOne(
-      { sessionId },
-      {
-        $set: {
-          "workflow.team": team,
-          "workflow.priority": route.priority,
-          "workflow.followUpKind": "date",
-          "workflow.followUpAt": route.followUpAt,
-          "workflow.updatedAt": new Date(),
-          ...(rule?.rule ? { "workflow.rule": rule.rule } : {}),
-          ...(reopen ? { "workflow.status": assign ? "Assigned" : "New", "workflow.assignedTo": assign || owner } : {}),
-        },
-        $unset: { "workflow.resolvedAt": "", "workflow.escalatedAt": "" },
-        $push: {
-          "workflow.activity": {
-            $each: [
-              { kind: "event", text: `${route.form} from the website — routed to ${team} (${route.priority}, reply within ${route.target})`, by: "Organic Mitra", at: new Date() },
-              ...(assign ? [{ kind: "event", text: `Assigned to ${assign} (${rule?.note})`, by: "Notification Settings", at: new Date() }] : []),
-            ],
-            $slice: -200,
-          },
-        },
-      },
-      { timestamps: false }
-    );
-    if (assign) notifyAssignment(assign, { name: lead.name, phone: lead.phone, topic: rule?.rule || route.form }, { sessionId }).catch(() => {});
-  }
+  // A quotation / callback request goes to the team set in the Manager's Forms & Routing
+  if (request) await routeRequest(sessionId, lead, request);
 
   notifyOnWhatsApp(sessionId, lead, pageUrl, request).catch((error) =>
     logger.warn(`Chatbot WhatsApp notification failed: ${error?.message}`)
@@ -247,6 +257,151 @@ export const startChat = asyncHandler(async (req: Request, res: Response) => {
 
   res.status(201).json(ApiResponse.created("Chat started", { sessionId }));
 });
+
+/** How far back a returning visitor's chat (same IP + same name) is picked up again */
+const RESUME_WITHIN_DAYS = 90;
+/** Messages sent back to show the earlier conversation */
+const RESTORE_MESSAGES = 40;
+
+// POST /api/chat/start — the name the visitor types first. The chat is saved under that name; if the
+// same IP chatted under the same name before (and that chat has no verified number from another
+// device), that chat continues and its messages are returned to show again.
+export const startByName = asyncHandler(async (req: Request, res: Response) => {
+  const sessionId = String(req.body.sessionId).trim();
+  const pageUrl = String(req.body.pageUrl || "").slice(0, 500);
+  const name = String(req.body.name).trim().replace(/\s+/g, " ");
+  const { visitor } = visitorOf(req);
+
+  const current = await Chat.findOne({ sessionId }).select("lead messages").lean<any>();
+  let target = sessionId;
+  let resumed = false;
+
+  // A page reload of the same chat keeps it; otherwise look for this visitor's earlier chat
+  const sameChat = current?.lead?.name && current.lead.name.toLowerCase() === name.toLowerCase();
+  if (!sameChat && !current?.lead?.phone) {
+    const previous = await Chat.findOne({
+      sessionId: { $ne: sessionId },
+      source: { $ne: "manual" },
+      "visitor.ip": visitor.ip,
+      "lead.name": { $regex: `^${escapeRegex(name)}$`, $options: "i" },
+      "workflow.spam": { $ne: true },
+      updatedAt: { $gte: new Date(Date.now() - RESUME_WITHIN_DAYS * DAY_MS) },
+    })
+      .sort({ updatedAt: -1 })
+      .select("sessionId")
+      .lean<any>();
+    if (previous) {
+      target = previous.sessionId;
+      resumed = true;
+      // Anything this browser saved before the name was given joins the earlier chat
+      if (current?.messages?.length) await Chat.updateOne({ sessionId: target }, { $push: { messages: { $each: current.messages } } });
+      if (current) await Chat.deleteOne({ sessionId });
+    }
+  }
+
+  await Chat.updateOne(
+    { sessionId: target },
+    { $set: { "lead.name": name, visitorName: name, visitor, ...(pageUrl ? { pageUrl } : {}) } },
+    { upsert: true }
+  );
+
+  const chat = await Chat.findOne({ sessionId: target }).select({ messages: { $slice: -RESTORE_MESSAGES } }).lean<any>();
+  const messages = (chat?.messages || []).map((m: { role: string; content: string; createdAt?: Date }) => ({
+    role: m.role,
+    content: m.content,
+    createdAt: m.createdAt,
+  }));
+
+  res.status(200).json(ApiResponse.ok(resumed ? "Welcome back" : "Chat started", { sessionId: target, name, resumed, messages }));
+});
+
+// ─── Contact details typed in the chat ───────────────────────────────────────
+
+/** "Call me" / "mujhe call karo" / "baat karni hai" / "फोन करें" … */
+const CALL_INTENT = /\b(call|calls|callback|ring|phone|contact me|baat|sampark)\b|कॉल|फोन|फ़ोन|बात|संपर्क/i;
+const MOBILE_IN_TEXT = /(?<!\d)(?:\+?91[\s-]?|0)?([6-9]\d{2}[\s-]?\d{3}[\s-]?\d{4}|[6-9]\d{4}[\s-]?\d{5})(?!\d)/;
+const EMAIL_IN_TEXT = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+
+/** A 10-digit mobile number and / or an email found in the visitor's message */
+const contactIn = (text: string) => {
+  const mobile = text.match(MOBILE_IN_TEXT)?.[1]?.replace(/\D/g, "");
+  const email = text.match(EMAIL_IN_TEXT)?.[0]?.toLowerCase();
+  return {
+    phone: mobile && /^[6-9]\d{9}$/.test(mobile) ? mobile : undefined,
+    email: email && email.length <= 100 ? email : undefined,
+  };
+};
+
+/**
+ * Saves a mobile number / email the visitor typed in the chat on the chat and on its enquiry
+ * (Contact Enquiries), and logs it for Inbox & Leads. A number given after asking for a call
+ * becomes a callback request routed to the team. Typed numbers are not OTP-verified.
+ */
+const saveTypedContact = async (o: {
+  sessionId: string;
+  chat: any;
+  phone?: string;
+  email?: string;
+  question: string;
+  wantsCall: boolean;
+  visitor: { ip: string; userAgent: string };
+}) => {
+  const name = o.chat?.lead?.name || "Website visitor";
+  const phone = o.phone || o.chat?.lead?.phone || "";
+  const email = o.email || o.chat?.lead?.email || "";
+  const summary = o.wantsCall && o.phone ? "Asked for a call back in the chat" : "Shared contact details in the chat";
+
+  let enquiryId = o.chat?.enquiryId;
+  if (!enquiryId && phone) {
+    const recent = await ContactEnquiry.findOne({ phone, service: CHATBOT_SERVICE, createdAt: { $gte: new Date(Date.now() - DUPLICATE_ENQUIRY_MS) } })
+      .sort({ createdAt: -1 })
+      .select("_id")
+      .lean();
+    enquiryId = recent?._id;
+  }
+  if (enquiryId) {
+    await ContactEnquiry.updateOne(
+      { _id: enquiryId },
+      { $set: { name, ...(phone ? { phone } : {}), ...(email ? { email } : {}), ...(o.wantsCall && o.phone ? { subject: "Chatbot callback request" } : {}) } }
+    );
+  } else {
+    const enquiry = await ContactEnquiry.create({
+      name,
+      phone,
+      email,
+      subject: o.wantsCall && o.phone ? "Chatbot callback request" : "Chatbot enquiry",
+      service: CHATBOT_SERVICE,
+      message: `${summary}: ${o.question}`.slice(0, 1000),
+    });
+    enquiryId = enquiry._id;
+  }
+
+  const shared = [o.phone && `mobile +91 ${o.phone}`, o.email && `email ${o.email}`].filter(Boolean).join(" and ");
+  await Chat.updateOne(
+    { sessionId: o.sessionId },
+    {
+      $set: {
+        enquiryId,
+        visitor: o.visitor,
+        ...(o.phone ? { "lead.phone": o.phone } : {}),
+        ...(o.email ? { "lead.email": o.email } : {}),
+        // Shown in Inbox & Leads as a new lead until the team picks it up
+        ...(!o.chat?.workflow?.status ? { "workflow.status": "New" } : {}),
+        "workflow.updatedAt": new Date(),
+      },
+      // A different number than the one verified with the OTP is not verified
+      ...(o.phone ? { $unset: { phoneVerifiedAt: "" } } : {}),
+      $push: {
+        "workflow.activity": { $each: [{ kind: "event", text: `Visitor shared ${shared} in the chat (not verified)`, by: "Organic Mitra", at: new Date() }], $slice: -200 },
+        ...(o.wantsCall && o.phone ? { requests: { type: "sales-callback" } } : {}),
+      },
+      $setOnInsert: { visitorName: name },
+    },
+    { upsert: true }
+  );
+
+  if (o.wantsCall && o.phone) await routeRequest(o.sessionId, { name, phone: o.phone }, { type: "sales-callback" });
+};
 
 export const CHAT_HISTORY_OTP_PROFILE = "CHAT_HISTORY";
 const HISTORY_RESULTS = 5;
@@ -301,12 +456,12 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
 
   // Visitors chat freely: until the mobile number is verified the chat is saved as "Visitor <ip>"
   const chat = await Chat.findOne({ sessionId })
-    .select({ lead: 1, enquiryId: 1, aiQuestions: 1, messages: { $slice: -HISTORY_LIMIT } })
+    .select({ lead: 1, enquiryId: 1, aiQuestions: 1, "workflow.status": 1, messages: { $slice: -HISTORY_LIMIT } })
     .lean<any>();
 
-  // A few questions are free; after that the website asks for name + mobile (OTP) first.
-  // Checked here too, so reloading the page or clearing the browser does not reset it.
-  if (!chat?.lead?.phone && (chat?.aiQuestions || 0) >= FREE_AI_QUESTIONS) {
+  // A visitor who gave their name (asked first in the chat) chats freely. Older chats without a
+  // name get a few free questions; after that the website asks for name + mobile (OTP) first.
+  if (!chat?.lead?.phone && !chat?.lead?.name && (chat?.aiQuestions || 0) >= FREE_AI_QUESTIONS) {
     res.status(403).json({ success: false, code: "DETAILS_REQUIRED", message: "Please share your name and mobile number to continue the chat." });
     return;
   }
@@ -320,6 +475,26 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
   const last = history[history.length - 1];
   const alreadySaved = last?.role === "user" && last.content.trim() === message;
   const context = alreadySaved ? history.slice(0, -1) : history;
+
+  // A mobile number / email typed in this message is saved on the enquiry before the reply, so
+  // the assistant can confirm it. A number counts as a callback request when the visitor asked
+  // for a call in this or their last few messages.
+  const found = contactIn(message);
+  const newPhone = found.phone && found.phone !== chat?.lead?.phone ? found.phone : undefined;
+  const newEmail = found.email && found.email !== chat?.lead?.email ? found.email : undefined;
+  const recentAsks = [...context.filter((m: { role: string }) => m.role === "user").slice(-3).map((m: { content: string }) => m.content), message].join(" \n ");
+  if (newPhone || newEmail) {
+    try {
+      await saveTypedContact({ sessionId, chat, phone: newPhone, email: newEmail, question: message, wantsCall: CALL_INTENT.test(recentAsks), visitor });
+    } catch (error: any) {
+      logger.error(`Could not save contact details for chat ${sessionId}: ${error?.message}`);
+    }
+  }
+  const contact = {
+    phone: newPhone || chat?.lead?.phone,
+    email: newEmail || chat?.lead?.email,
+    saved: [...(newPhone ? ["phone" as const] : []), ...(newEmail ? ["email" as const] : [])],
+  };
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -366,7 +541,7 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
     const stream = await client.responses.create(
       {
         model,
-        instructions: buildInstructions(chat?.lead?.name || undefined, ctx),
+        instructions: buildInstructions(chat?.lead?.name || undefined, ctx, contact),
         input: [
           ...context.map((m: { role: "user" | "assistant"; content: string }) => ({ role: m.role, content: m.content })),
           { role: "user" as const, content: message },
@@ -434,8 +609,6 @@ export const sendChatMessage = asyncHandler(async (req: Request, res: Response) 
 });
 
 // ─── Admin panel ─────────────────────────────────────────────────────────────
-
-const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Chats started between ?from and ?to (ISO dates), optionally matching ?search. */
 const buildChatFilter = (query: Request["query"]) => {

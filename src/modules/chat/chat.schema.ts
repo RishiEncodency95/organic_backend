@@ -36,6 +36,20 @@ export const chatLeadSchema = z.object({
   }),
 });
 
+// The name a visitor types when the chat asks "May I know your name?"
+export const chatStartSchema = z.object({
+  body: z.object({
+    sessionId,
+    pageUrl,
+    name: z
+      .string()
+      .trim()
+      .min(2, "Please type your name")
+      .max(40, "Name is too long")
+      .regex(/^\p{L}[\p{L}\p{M} .'-]*$/u, "Name can only contain letters"),
+  }),
+});
+
 // Previous chats of a visitor who verified this mobile number / email with OTP
 export const chatHistorySchema = z.object({
   body: z

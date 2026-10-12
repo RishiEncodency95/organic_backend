@@ -1,6 +1,6 @@
 import BuyerEnquiry from "../../../models/contact/buyerEnquiry.model";
 import Otp from "../../../models/contact/otp.model";
-import { env } from "../../../config/env";
+import { otpProofRequired } from "../../../utils/otpProof";
 import { ApiError } from "../../../utils/ApiError";
 
 export const BUYER_ENQUIRY_OTP_PROFILE = "BUYER_ENQUIRY";
@@ -11,8 +11,7 @@ const text = (v: unknown, max = 300) => String(v ?? "").trim().slice(0, max);
 /**
  * The popup only submits after the browser verified the WhatsApp OTP, but that check is
  * client-side. Here the server confirms a verified OTP record for this number exists (and
- * consumes it so it can't be replayed). Outside production the dev master OTP (123456)
- * verifies without creating a record, so the check is skipped there.
+ * consumes it so it can't be replayed) — only when otpProofRequired() (see otpProof.ts).
  */
 const consumeVerifiedPhone = async (phone: string) => {
   const record = await Otp.findOneAndDelete({
@@ -20,7 +19,7 @@ const consumeVerifiedPhone = async (phone: string) => {
     isVerified: true,
     profile: BUYER_ENQUIRY_OTP_PROFILE,
   });
-  if (!record && env.NODE_ENV === "production") {
+  if (!record && otpProofRequired()) {
     throw ApiError.badRequest("Please verify your WhatsApp number with OTP before submitting.");
   }
 };

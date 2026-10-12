@@ -4,6 +4,7 @@ import VisitorRegistration, {
   VISITOR_SUBTYPES,
 } from "../../../models/visitor/visitorRegistration.model";
 import { ApiError } from "../../../utils/ApiError";
+import { emailProblem } from "../../../utils/emailCheck";
 
 type Category = (typeof VISITOR_CATEGORIES)[number];
 type SubType = (typeof VISITOR_SUBTYPES)[number];
@@ -62,8 +63,34 @@ const createWithNumber = async (category: Category, doc: Record<string, unknown>
 
 const requireContact = (name: string, email: string, mobile: string) => {
   if (!name) throw ApiError.badRequest("Please enter the visitor's name.");
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) throw ApiError.badRequest("Please enter a valid email address.");
+  const emailError = emailProblem(email);
+  if (emailError) throw ApiError.badRequest(emailError);
   if (!/^\+?\d[\d\s-]{6,18}$/.test(mobile)) throw ApiError.badRequest("Please enter a valid mobile number.");
+};
+
+/** Last 10 digits, so "+91 98765 43210" and "9876543210" are the same number */
+const mobileKey = (mobile: string) => mobile.replace(/\D/g, "").slice(-10);
+
+/**
+ * One registration per mobile number (and per email) for an event: a second submit is refused
+ * with the number already issued, instead of creating a duplicate pass.
+ */
+const refuseDuplicate = async (eventName: string, mobile: string, email: string) => {
+  const digits = mobileKey(mobile);
+  if (digits.length < 6) return;
+  const existing: any = await VisitorRegistration.findOne({
+    ...(eventName ? { eventName } : {}),
+    $or: [
+      { mobile: { $regex: `${digits}$` } },
+      { "persons.mobile": { $regex: `${digits}$` } },
+      ...(email ? [{ email }, { "persons.email": email }] : []),
+    ],
+  })
+    .select("registrationNo mobile email")
+    .lean();
+  if (!existing) return;
+  const by = mobileKey(String(existing.mobile || "")) === digits ? "mobile number" : "email";
+  throw new ApiError(409, `This ${by} is already registered for the expo (registration no. ${existing.registrationNo}). Please use a different ${by}, or contact us for your pass.`);
 };
 
 /** Domestic (corporate / general / health camp) and international: one person per registration. */
@@ -72,6 +99,7 @@ export const createSingleVisitorService = async (category: "domestic" | "interna
   const email = text(body?.email, 200).toLowerCase();
   const mobile = text(body?.mobile || body?.mobileNo, 25);
   requireContact(name, email, mobile);
+  await refuseDuplicate(text(body?.registrationFor, 60), mobile, email);
 
   return createWithNumber(category, {
     subType,
@@ -105,6 +133,22 @@ export const createGroupVisitorService = async (body: any) => {
   const name = fullName(primary);
   requireContact(name, primary.email, primary.mobile);
   if (!text(company?.companyName)) throw ApiError.badRequest("Please enter the organisation name.");
+
+  // No member twice in the group, and nobody already registered
+  const seen = new Set<string>();
+  for (const [i, p] of persons.entries()) {
+    const key = mobileKey(p.mobile);
+    const nameKey = `${p.firstName} ${p.lastName}`.trim().toLowerCase().replace(/\s+/g, " ");
+    if (emailProblem(p.email)) throw ApiError.badRequest(`Person ${i + 1}: ${emailProblem(p.email)}`);
+    if (!p.firstName || !/^\+?\d[\d\s-]{6,18}$/.test(p.mobile)) {
+      throw ApiError.badRequest(`Please complete the name, email and mobile number of person ${i + 1}.`);
+    }
+    for (const k of [`m:${key}`, `e:${p.email}`, `n:${nameKey}`]) {
+      if (seen.has(k)) throw ApiError.badRequest(`Person ${i + 1} repeats another member's ${k[0] === "m" ? "mobile number" : k[0] === "e" ? "email" : "name"}. Each member must be a different person.`);
+      seen.add(k);
+    }
+  }
+  for (const p of persons) await refuseDuplicate(text(company?.registrationFor, 60), p.mobile, p.email);
 
   return createWithNumber("group", {
     eventName: text(company?.registrationFor, 60),

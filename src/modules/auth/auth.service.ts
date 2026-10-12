@@ -24,6 +24,16 @@ const generateRefreshToken = (id: string): string => {
 
 // ─── Auth Service ─────────────────────────────────────────────────────────────
 
+/**
+ * Checks a 6-digit authenticator code. Spaces / dashes typed or pasted with it ("123 456") are
+ * ignored, and ±2 time steps (±60s) are accepted so a phone clock that is slightly off still works.
+ */
+const totpValid = (secret: string | undefined, code: unknown) => {
+  const token = String(code ?? "").replace(/\D/g, "");
+  if (!secret || token.length !== 6) return false;
+  return speakeasy.totp.verify({ secret, encoding: "base32", token, window: 2 });
+};
+
 export const loginService = async (data: LoginInput) => {
   const { email, password } = data;
 
@@ -71,12 +81,7 @@ export const loginService = async (data: LoginInput) => {
   // Check 2FA status
   if (admin.isTwoFactorEnabled) {
     if (data.totpCode) {
-      const isValid = speakeasy.totp.verify({
-        secret: admin.twoFactorSecret || "",
-        encoding: "base32",
-        token: data.totpCode,
-        window: 1,
-      });
+      const isValid = totpValid(admin.twoFactorSecret, data.totpCode);
 
       if (!isValid) {
         throw ApiError.unauthorized("Invalid 2FA code from Microsoft Authenticator");
@@ -170,15 +175,8 @@ export const verify2FAService = async (token: string, tempToken?: string) => {
   }
 
   // Verify TOTP code with Microsoft Authenticator / Google Authenticator
-  const isValid = speakeasy.totp.verify({
-    secret: admin.twoFactorSecret,
-    encoding: "base32",
-    token,
-    window: 1, // 30-second window allowance for clock drift
-  });
-
-  if (!isValid) {
-    throw ApiError.unauthorized("Invalid 2FA code");
+  if (!totpValid(admin.twoFactorSecret, token)) {
+    throw ApiError.unauthorized("Invalid 2FA code. Use the latest code from your authenticator app and check that your phone's time is set automatically.");
   }
 
   await admin.resetLoginAttempts();
@@ -201,30 +199,35 @@ export const verify2FAService = async (token: string, tempToken?: string) => {
   };
 };
 
+/**
+ * QR code / key for adding the account to an authenticator app.
+ *
+ * Calling it again before the setup is confirmed returns the SAME secret: the login page asks
+ * for it more than once (session check + after login), and a new secret each time made the QR
+ * the user had already scanned stop working. Once 2FA is enabled the secret is never replaced
+ * here, so an active authenticator keeps working.
+ */
 export const setup2FAService = async (adminId: string) => {
-  const admin = await Admin.findById(adminId);
-  const labelEmail = admin ? admin.email : "Staff";
-
-  // Generate TOTP secret for Microsoft Authenticator
-  const secret = speakeasy.generateSecret({
-    name: `Bharat Organic Expo (${labelEmail})`,
-    issuer: "Bharat Organic Expo",
-    length: 32,
-  });
-
-  if (admin) {
-    admin.twoFactorSecret = secret.base32;
-    await admin.save();
+  const admin = await Admin.findById(adminId).select("+twoFactorSecret");
+  if (!admin) throw ApiError.notFound("Admin account not found");
+  if (admin.isTwoFactorEnabled) {
+    throw ApiError.badRequest("Two-factor authentication is already set up for this account. Use the code from your authenticator app.");
   }
 
-  // Generate QR Code Data URL
-  const qrCodeUrl = await qrcode.toDataURL(secret.otpauth_url!);
+  const label = `Bharat Organic Expo (${admin.email})`;
+  let base32 = admin.twoFactorSecret;
+  if (!base32) {
+    base32 = speakeasy.generateSecret({ name: label, issuer: "Bharat Organic Expo", length: 32 }).base32;
+    admin.twoFactorSecret = base32;
+    await admin.save();
+  }
+  const provisioningUri = speakeasy.otpauthURL({ secret: base32, encoding: "base32", label, issuer: "Bharat Organic Expo" });
 
   return {
-    secret: secret.base32,
-    manualKey: secret.base32,
-    provisioningUri: secret.otpauth_url!,
-    qrCode: qrCodeUrl,
+    secret: base32,
+    manualKey: base32,
+    provisioningUri,
+    qrCode: await qrcode.toDataURL(provisioningUri),
   };
 };
 
@@ -234,14 +237,9 @@ export const confirm2FASetupService = async (adminId: string, token: string) => 
     throw ApiError.notFound("Admin account or 2FA secret not found");
   }
 
-  const isValid = speakeasy.totp.verify({
-    secret: admin.twoFactorSecret,
-    encoding: "base32",
-    token,
-    window: 1,
-  });
-
-  if (!isValid) throw ApiError.unauthorized("Invalid 2FA confirmation code");
+  if (!totpValid(admin.twoFactorSecret, token)) {
+    throw ApiError.unauthorized("Invalid 2FA confirmation code. Use the latest code shown in your authenticator app.");
+  }
 
   admin.isTwoFactorEnabled = true;
   await admin.save();

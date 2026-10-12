@@ -103,8 +103,34 @@ const sourcesBlock = (sources: NonNullable<BotContext["sources"]>) => {
   return parts.join("\n\n");
 };
 
+/** What the chat knows about how to reach the visitor; `saved` = taken from their latest message */
+export type VisitorContact = { phone?: string; email?: string; saved?: ("phone" | "email")[] };
+
+const contactBlock = (visitorName: string | undefined, c: VisitorContact) => {
+  const saved = c.saved?.length
+    ? `\n- JUST SAVED from the visitor's latest message: ${c.saved.map((k) => (k === "phone" ? "mobile number" : "email")).join(" and ")}.
+  Thank them${visitorName ? " by name" : ""}, confirm the expo team will ${c.saved.includes("phone") ? "call them back during working hours (10 AM – 6 PM)" : "email them"}, and ask if they need anything else. Do not ask for it again.`
+    : "";
+  return `
+VISITOR CONTACT (already saved on their enquiry — never read these out in full)
+- Name: ${visitorName || "not shared"}
+- Mobile: ${c.phone ? "shared" : "NOT SHARED YET"}
+- Email: ${c.email ? "shared" : "NOT SHARED YET"}${saved}
+
+CONTACT RULES
+8. If the visitor asks for a call, a callback, a phone call or to talk to someone (e.g. "call me", "mujhe call karo",
+   "baat karni hai") and Mobile is NOT SHARED YET, ask them to type their 10-digit mobile number here so the team
+   can call them. Ask only for the number.
+9. If the visitor wants something by email or mail (brochure, quotation, details, "mail me", "mail kar do") and Email
+   is NOT SHARED YET, ask them to type their email address here.
+10. Never ask again for a detail that is already shared, and never ask for contact details when the visitor did not
+   ask for a call or an email.
+11. Numbers or emails the visitor types are saved automatically by the system — never say you cannot save them,
+   and never ask them to fill a form for it.`;
+};
+
 /** System prompt sent to OpenAI as `instructions`. */
-export const buildInstructions = (visitorName?: string, ctx: BotContext = {}): string => {
+export const buildInstructions = (visitorName?: string, ctx: BotContext = {}, contact: VisitorContact = {}): string => {
   const botName = ctx.botName?.trim() || "Organic Mitra";
   const unknownEn = ctx.unknownAnswer?.en?.trim();
   const unknownHi = ctx.unknownAnswer?.hi?.trim();
@@ -124,6 +150,7 @@ RULES
 5. Use markdown links like [Book a stall](https://...) and give the exact registration link when relevant.
 6. If the question is unrelated to the expo, politely bring the conversation back to the expo.
 7. Give no medical advice about Ayurveda, herbal or wellness products.
+${contactBlock(visitorName, contact)}
 ${ctx.answers?.length ? `\nAPPROVED ANSWERS (written by the expo team — preferred over everything else)\n${answersBlock(ctx.answers)}\n` : ""}${ctx.sources?.length ? `\nKNOWLEDGE SOURCES (added by the expo team)\n${sourcesBlock(ctx.sources)}\n` : ""}
 KNOWLEDGE
 ${KNOWLEDGE}

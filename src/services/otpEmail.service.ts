@@ -85,7 +85,12 @@ export const sendOtpEmail = async (
     }
     return { sent: true, error: null };
   } catch (err) {
-    console.error("❌ [Email OTP] Send failed:", (err as Error).message);
+    const e = err as Error & { code?: string; responseCode?: number };
+    console.error("❌ [Email OTP] Send failed:", e.code || "", e.message);
+    // The server's own mail login / connection failed: not the visitor's address
+    if (e.code === "EAUTH" || e.code === "ECONNECTION" || e.code === "ETIMEDOUT" || e.code === "ESOCKET") {
+      return { sent: false, error: "Our email service is temporarily unavailable. Please try again in a little while, or contact us at +91 96549 00525." };
+    }
     return { sent: false, error: "Could not send the verification email. Please check the address and try again." };
   }
 };

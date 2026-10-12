@@ -1,7 +1,7 @@
 import AwardsNomination from "../../../../models/awards/awardsNomination.model";
 import Otp from "../../../../models/contact/otp.model";
 import { ApiError } from "../../../../utils/ApiError";
-import { env } from "../../../../config/env";
+import { otpProofRequired } from "../../../../utils/otpProof";
 import { resolveDropdownValues } from "../../../dropdowns/dropdownValue";
 
 const MOBILE_RE = /^[6-9]\d{9}$/;
@@ -64,15 +64,13 @@ const validateNomination = (data: Record<string, any>): string[] => {
   return errors;
 };
 
-/** The website verifies both contacts by OTP; the verified OTP record is the proof. */
+/** The website verifies both contacts by OTP; the verified OTP record is the proof (see otpProof.ts). */
 const assertContactsVerified = async (mobile: string, email: string) => {
+  if (!otpProofRequired()) return;
   const [phoneOk, emailOk] = await Promise.all([
     Otp.exists({ phone: { $in: [mobile, `91${mobile}`, `+91${mobile}`] }, isVerified: true }),
     Otp.exists({ email, isVerified: true }),
   ]);
-
-  // Development accepts the master OTP (123456), which verifies without a stored record.
-  if (env.NODE_ENV !== "production") return;
 
   const errors: string[] = [];
   if (!phoneOk) errors.push("Mobile number is not verified. Please verify it with the WhatsApp OTP.");

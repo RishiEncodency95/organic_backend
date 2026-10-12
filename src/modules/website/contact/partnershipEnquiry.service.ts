@@ -1,20 +1,20 @@
 import PartnershipEnquiry from "../../../models/contact/partnershipEnquiry.model";
 import Otp from "../../../models/contact/otp.model";
-import { env } from "../../../config/env";
+import { otpProofRequired } from "../../../utils/otpProof";
 import { ApiError } from "../../../utils/ApiError";
 import { resolveDropdownValue } from "../../dropdowns/dropdownValue";
+import { emailProblem } from "../../../utils/emailCheck";
 
 export const PARTNERSHIP_OTP_PROFILE = "PARTNERSHIP_ENQUIRY";
 
 /**
  * The form only submits after the browser verified the WhatsApp OTP, but that check is
  * client-side. Here the server confirms a verified OTP record for this number actually
- * exists (and consumes it so it can't be replayed). Outside production the dev master OTP
- * (123456) verifies without creating a record, so the check is skipped there.
+ * exists (and consumes it so it can't be replayed) — only when otpProofRequired() (see otpProof.ts).
  */
 const consumeVerifiedPhone = async (phone: string) => {
   const record = await Otp.findOneAndDelete({ phone, isVerified: true, profile: PARTNERSHIP_OTP_PROFILE });
-  if (!record && env.NODE_ENV === "production") {
+  if (!record && otpProofRequired()) {
     throw ApiError.badRequest("Please verify your WhatsApp number with OTP before submitting.");
   }
 };
@@ -45,6 +45,53 @@ export const createPartnershipEnquiryService = async (payload: any) => {
     category,
     message: String(payload?.message || "").trim(),
     eventName: String(payload?.eventName || "").trim() || undefined,
+  });
+};
+
+/**
+ * Home page "Interested in Sponsoring?" form (POST /sponsorship-enquiry). Saved with the
+ * partnership enquiries (Admin → Partnership Enquiries) with the category "Sponsorship: …".
+ * Its OTP is verified with the website's OTP service before submitting.
+ */
+export const createSponsorshipEnquiryService = async (payload: any) => {
+  const name = String(payload?.fullName || payload?.name || "").trim().replace(/\s+/g, " ");
+  const organization = String(payload?.companyName || payload?.organization || "").trim();
+  const email = String(payload?.email || "").trim().toLowerCase();
+  const digits = String(payload?.phone || "").replace(/\D/g, "");
+  const phone = digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits;
+  const message = String(payload?.message || "").trim();
+
+  const problems = [
+    !name && "Full name is required.",
+    !!name && !/^\p{L}[\p{L}\p{M} .'-]{1,59}$/u.test(name) && "Full name can contain letters only.",
+    !organization && "Company name is required.",
+    emailProblem(email),
+    !/^[6-9]\d{9}$/.test(phone) && "Please enter a valid 10-digit WhatsApp number.",
+    message.length > 1000 && "Message must be 1000 characters or fewer.",
+  ].filter(Boolean) as string[];
+  if (problems.length) throw ApiError.badRequest(problems.join(" "));
+
+  const category = await resolveDropdownValue("sponsorship-category", payload?.category, {
+    field: "Sponsorship category",
+    required: true,
+  });
+
+  // One enquiry per number per day is enough for the team; a second submit is not saved again
+  const recent = await PartnershipEnquiry.findOne({
+    phone,
+    category: { $regex: "^Sponsorship:" },
+    createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+  }).lean();
+  if (recent) throw new ApiError(409, "We have already received your sponsorship enquiry. Our team will contact you soon.");
+
+  return await PartnershipEnquiry.create({
+    name,
+    organization,
+    email,
+    phone,
+    category: `Sponsorship: ${category}`,
+    message,
+    eventName: String(payload?.eventName || "").trim() || "BOE2027",
   });
 };
 

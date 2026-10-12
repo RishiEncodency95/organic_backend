@@ -7,6 +7,7 @@ import rolesRouter from "../modules/roles/roles.routes";
 import websiteHomeRouter from "../modules/website/websiteHome.routes";
 import websiteAboutRouter from "../modules/website/websiteAbout.routes";
 import websiteAdvisoryBoardMemberRouter from "../modules/website/websiteAdvisoryBoardMember.routes";
+import advisoryNominationRouter from "../modules/website/abouts/advisory_board_member/advisoryNomination/advisoryNomination.routes";
 import websiteBlogRouter from "../modules/website/websiteBlog.routes";
 import websiteBlogSlugRouter from "../modules/website/websiteBlogSlug.routes";
 import seoRouter from "../modules/seo/seo.routes";
@@ -25,6 +26,7 @@ import websiteRegistrationRouter from "../modules/website/websiteRegistration.ro
 import contactEnquiryRouter from "../modules/website/contact/contactEnquiry.routes";
 import verifyRouter from "../modules/website/contact/verify.routes";
 import partnershipEnquiryRouter from "../modules/website/contact/partnershipEnquiry.routes";
+import { submitSponsorshipEnquiry } from "../modules/website/contact/partnershipEnquiry.controller";
 import buyerEnquiryRouter from "../modules/website/buyerEnquiry/buyerEnquiry.routes";
 import { visitorAdminRouter, visitorPublicRouter } from "../modules/website/visitorRegistration/visitorRegistration.routes";
 import { exhibitorAdminRouter, exhibitorPublicRouter } from "../modules/expo/exhibitorRegistration.routes";
@@ -82,6 +84,8 @@ router.use("/website/seo-settings", advancedSeoRouter);
 router.use("/website", websiteHomeRouter);
 router.use("/website", websiteAboutRouter);
 router.use("/website", websiteAdvisoryBoardMemberRouter);
+// Advisory Board nominations: website form + Admin → Advisory Nominations
+router.use("/advisory-nominations", advisoryNominationRouter);
 router.use("/website", websiteBlogRouter);
 router.use("/website", websiteBlogSlugRouter);
 router.use("/blogs", blogPostRouter);
@@ -101,6 +105,8 @@ router.use("/contact-enquiry", contactEnquiryRouter);
 router.use("/website/contact-enquiry", contactEnquiryRouter);
 router.use("/website/contact", contactEnquiryRouter);
 router.use("/partnership-enquiry", partnershipEnquiryRouter);
+// Home page "Interested in Sponsoring?" form — it posted here, but the route was missing
+router.post("/sponsorship-enquiry", submitSponsorshipEnquiry);
 router.use("/buyer-enquiries", buyerEnquiryRouter);
 // Visitor registration forms (/corporate-visitors, /general-visitors, ...) + admin list
 router.use("/", visitorPublicRouter);

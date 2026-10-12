@@ -30,14 +30,22 @@ export const chatLimiter = rateLimit({
 
 // Chatbot details form — each submit can send WhatsApp messages
 // Chat clicks and scripted replies saved before the details form
-export const chatTrackLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: 60,
-  message: new ApiError(429, "Too many requests. Please wait a minute and try again."),
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
+export const chatTrackLimiter = rateLimit({
+
+  windowMs: 60 * 1000, // 1 minute
+
+  max: 60,
+
+  message: new ApiError(429, "Too many requests. Please wait a minute and try again."),
+
+  standardHeaders: true,
+
+  legacyHeaders: false,
+
+});
+
+
+
 export const chatLeadLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10,
@@ -65,4 +73,15 @@ export const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV !== "production",
+});
+
+// Advisory Board nomination form — a person rarely needs more than a few submits an hour
+export const nominationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  message: new ApiError(429, "Too many nominations from this network. Please try again later."),
+  // Only nominations that were saved count: fixing a validation mistake does not use up the limit
+  skipFailedRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
 });
