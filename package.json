@@ -11,6 +11,7 @@
     "seed:career-options": "tsx scripts/seed_career_options.ts",
     "seed:dropdowns": "tsx scripts/seed_dropdowns.ts",
     "seed:expo-event": "tsx scripts/seed_expo_event.ts",
+    "seed:blog": "tsx scripts/seed_blog_sections.ts",
     "seed:credentials": "tsx scripts/seed_credentials.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:dropdowns": "tsx scripts/test_dropdowns_api.ts"
