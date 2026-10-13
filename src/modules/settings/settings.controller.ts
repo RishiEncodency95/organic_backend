@@ -27,7 +27,7 @@ const defaultFooter = {
   conferenceHelpline: "+91 98183 53841",
   contactEmail: "info@namogangewellness.com",
   facebookUrl: "https://facebook.com/bharatorganicexpo",
-  twitterUrl: "https://twitter.com/bharatorganic",
+  twitterUrl: "https://x.com/organicexpoin",
   linkedinUrl: "https://linkedin.com/company/bharatorganicexpo",
   instagramUrl: "https://instagram.com/bharatorganicexpo",
   youtubeUrl: "https://youtube.com/@bharatorganicexpo",
