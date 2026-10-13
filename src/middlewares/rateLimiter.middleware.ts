@@ -104,3 +104,12 @@ export const newsletterLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// Pincode autofill on the registration forms — a visitor types a handful of pincodes at most
+export const pincodeLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30,
+  message: new ApiError(429, "Too many pincode lookups. Please wait a minute and try again."),
+  standardHeaders: true,
+  legacyHeaders: false,
+});

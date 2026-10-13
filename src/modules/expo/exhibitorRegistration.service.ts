@@ -137,6 +137,25 @@ export const createExhibitorRegistrationService = async (body: any) => {
   const currency = text(body?.participation?.currency, 3).toUpperCase() === "USD" ? "USD" : "INR";
   const category: Category = currency === "USD" ? "international" : "domestic";
 
+  // Same formats the book-a-stand form checks. Optional values are only checked when sent,
+  // so bookings entered by staff without them still save. Values are never logged.
+  const pincode = text(body?.pincode, 15);
+  const gstNo = text(body?.gstNo, 20).toUpperCase();
+  const panNo = text(body?.panNo, 15).toUpperCase();
+  const aadhaarNo = text(body?.aadhaarNo, 20);
+  if (category === "domestic") {
+    const mobileDigits = c1.mobile.replace(/\D/g, "").replace(/^(?:91|0)(?=[6-9]\d{9}$)/, "");
+    if (!/^[6-9]\d{9}$/.test(mobileDigits)) throw ApiError.badRequest("Mobile number must be 10 digits and start with 6, 7, 8 or 9.");
+    if (pincode && !/^[1-9]\d{5}$/.test(pincode)) throw ApiError.badRequest("Pincode must be 6 digits and cannot start with 0.");
+    if (gstNo && !/^\d{2}[A-Z]{5}\d{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstNo)) throw ApiError.badRequest("GST number is not valid.");
+    if (panNo && !/^[A-Z]{5}\d{4}[A-Z]$/.test(panNo)) throw ApiError.badRequest("PAN must be 5 letters, 4 digits, then 1 letter.");
+    if (aadhaarNo && !/^\d{12}$/.test(aadhaarNo)) throw ApiError.badRequest("Aadhaar number must be exactly 12 digits.");
+  } else if (pincode && !/^[A-Za-z0-9][A-Za-z0-9 -]{1,8}[A-Za-z0-9]$/.test(pincode)) {
+    throw ApiError.badRequest("Please enter a valid postal / ZIP code.");
+  }
+  const c2Email = text(body?.contact2?.email, 200);
+  if (c2Email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(c2Email)) throw ApiError.badRequest("Please enter a valid email address for the second contact.");
+
   const [event, stall]: any[] = await Promise.all([ExpoEvent.findById(eventId).lean(), Stall.findById(stallId).lean()]);
   if (!event) throw ApiError.badRequest("This expo event was not found.");
   if (!stall || String(stall.event) !== String(eventId)) throw ApiError.badRequest("This stall was not found for the selected event.");
@@ -184,9 +203,9 @@ export const createExhibitorRegistrationService = async (body: any) => {
     country: text(body?.country, 80),
     state: text(body?.state, 80),
     city: text(body?.city, 80),
-    pincode: text(body?.pincode, 15),
-    gstNo: text(body?.gstNo, 20),
-    panNo: text(body?.panNo, 15),
+    pincode,
+    gstNo,
+    panNo,
     contact1: c1,
     contact2: contact(body?.contact2),
     stall: stall._id,

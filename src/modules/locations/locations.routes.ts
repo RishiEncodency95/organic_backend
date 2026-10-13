@@ -10,6 +10,8 @@ import {
   updateCustomCity,
   deleteCustomCity,
 } from "./locations.controller";
+import { getPincode, getPostalCode } from "./pincode.controller";
+import { pincodeLimiter } from "../../middlewares/rateLimiter.middleware";
 
 const router = Router();
 
@@ -17,6 +19,10 @@ const router = Router();
 router.get("/crm-countries", getCountries);
 router.get("/crm-states", getStates);
 router.get("/crm-cities", getCities);
+// Indian PIN code → state / city / country (registration forms' pincode autofill)
+router.get("/pincode/:pincode", pincodeLimiter, getPincode);
+// Postal / ZIP code outside India → state / city
+router.get("/postal/:countryCode/:code", pincodeLimiter, getPostalCode);
 
 // Admin: add cities the built-in data does not have.
 const canView = [protect, requirePermission("perm_content_view", "perm_content_edit")];

@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { emailProblem } from "../../../utils/emailCheck";
 import asyncHandler from "../../../utils/asyncHandler";
 import { ApiResponse } from "../../../utils/ApiResponse";
 import {
@@ -22,6 +23,16 @@ export const submitContactEnquiry = asyncHandler(
             null
           )
         );
+      return;
+    }
+
+    // Same rules as the website's contact form: a real-looking email and an Indian mobile number
+    const phoneDigits = String(phone).replace(/\D/g, "").replace(/^(?:91|0)(?=[6-9]\d{9}$)/, "");
+    const problem =
+      emailProblem(String(email).trim(), "Email") ||
+      (/^[6-9]\d{9}$/.test(phoneDigits) ? "" : "Mobile number must be 10 digits and start with 6, 7, 8 or 9.");
+    if (problem) {
+      res.status(400).json(new ApiResponse(400, problem, null));
       return;
     }
 
