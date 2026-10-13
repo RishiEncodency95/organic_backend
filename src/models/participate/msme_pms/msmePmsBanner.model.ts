@@ -42,7 +42,7 @@ const msmePmsBannerSchema = new Schema(
         {
           id: "support",
           label: "GET PMS SUPPORT",
-          href: "tel:+9654900525",
+          href: "tel:+919654900525",
           isExternal: false,
           variant: "secondary",
         },

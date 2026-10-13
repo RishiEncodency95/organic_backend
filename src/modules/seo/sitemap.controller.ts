@@ -8,7 +8,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://bharatorganicexpo.
 const staticPages = [
   { path: "", priority: 1.0, changeFreq: "weekly" },
   { path: "/about", priority: 0.9, changeFreq: "monthly" },
-  { path: "/about/suport_services", priority: 0.7, changeFreq: "monthly" },
+  { path: "/about/support-services", priority: 0.7, changeFreq: "monthly" },
   { path: "/blog", priority: 0.9, changeFreq: "daily" },
   { path: "/gallery", priority: 0.8, changeFreq: "weekly" },
   { path: "/contact", priority: 0.8, changeFreq: "monthly" },
