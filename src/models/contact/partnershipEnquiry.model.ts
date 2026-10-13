@@ -8,6 +8,13 @@ const partnershipEnquirySchema = new Schema(
     phone: { type: String, required: true, trim: true },
     category: { type: String, required: true, trim: true },
     message: { type: String, default: "", trim: true },
+    /** Extra details from the partner pages (hotel, travel, logistics…) and the e-promotion popup */
+    designation: { type: String, default: "", trim: true },
+    website: { type: String, default: "", trim: true },
+    city: { type: String, default: "", trim: true },
+    state: { type: String, default: "", trim: true },
+    /** Which website form sent it, e.g. "partner-page", "e-promotion" */
+    source: { type: String, default: "", trim: true },
     eventName: { type: String, default: "BOE2026", trim: true },
     status: {
       type: String,

@@ -4,6 +4,8 @@ import { ApiResponse } from "../../../utils/ApiResponse";
 import {
   createPartnershipEnquiryService,
   createSponsorshipEnquiryService,
+  createPartnerRegistrationService,
+  createEPromotionEnquiryService,
   getAllPartnershipEnquiriesService,
   getPartnershipEnquiryByIdService,
   updatePartnershipEnquiryService,
@@ -20,6 +22,18 @@ export const submitPartnershipEnquiry = asyncHandler(async (req: Request, res: R
 export const submitSponsorshipEnquiry = asyncHandler(async (req: Request, res: Response) => {
   const data = await createSponsorshipEnquiryService(req.body);
   res.status(201).json(new ApiResponse(201, "Sponsorship enquiry submitted successfully", data));
+});
+
+// POST /partnership-enquiry/partner — the partner pages' "Partner with us" form
+export const submitPartnerRegistration = asyncHandler(async (req: Request, res: Response) => {
+  const data = await createPartnerRegistrationService(req.body);
+  res.status(201).json(new ApiResponse(201, "Thank you! Your partner registration has been received.", { _id: data._id }));
+});
+
+// POST /partnership-enquiry/e-promotion — the E-Promotion page "Enquire now" popup
+export const submitEPromotionEnquiry = asyncHandler(async (req: Request, res: Response) => {
+  const data = await createEPromotionEnquiryService(req.body);
+  res.status(201).json(new ApiResponse(201, "Thank you! Your enquiry has been received.", { _id: data._id }));
 });
 
 export const getAllPartnershipEnquiries = asyncHandler(async (req: Request, res: Response) => {

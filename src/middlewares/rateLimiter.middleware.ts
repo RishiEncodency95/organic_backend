@@ -85,3 +85,22 @@ export const nominationLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+/** Website enquiry forms (partner pages, e-promotion, partnership): saved submissions per network */
+export const enquiryLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 15,
+  message: new ApiError(429, "Too many enquiries from this network. Please try again later."),
+  skipFailedRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/** Newsletter "Subscribe" forms */
+export const newsletterLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20,
+  message: new ApiError(429, "Too many attempts from this network. Please try again later."),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
