@@ -14,7 +14,7 @@ const staticPages = [
   { path: "/contact", priority: 0.8, changeFreq: "monthly" },
   { path: "/buyer-seller-meet", priority: 0.8, changeFreq: "monthly" },
   { path: "/why-exhibit", priority: 0.8, changeFreq: "monthly" },
-  { path: "/why-visit", priority: 0.8, changeFreq: "monthly" },
+  { path: "/participate/why-visit", priority: 0.8, changeFreq: "monthly" },
   { path: "/exhibitors", priority: 0.8, changeFreq: "weekly" },
   { path: "/participate-as-exhibitor", priority: 0.8, changeFreq: "monthly" },
   { path: "/awards", priority: 0.7, changeFreq: "monthly" },
