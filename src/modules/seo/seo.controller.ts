@@ -240,6 +240,35 @@ export const seoController = {
       };
 
       const result = await seoService.upsertSeo(payload);
+
+      // Record SEO update into ActivityLog for full audit trail
+      const { ActivityLog } = await import("../../models/ActivityLog.model");
+      await ActivityLog.create({
+        userName: (req as any).user?.name || req.body.updatedBy || "Admin User",
+        action: "Updated",
+        module: "SEO Settings",
+        url: `/seo/${page}`,
+        method: req.method || "POST",
+        apiPath: req.originalUrl,
+        ip: req.ip || "127.0.0.1",
+        status: "Success",
+        statusCode: 200,
+        details: `Updated SEO meta tags for page route: /${page}`,
+        changes: [
+          {
+            entity: "Seo",
+            entityId: String(result._id),
+            operation: "updated",
+            after: {
+              page,
+              metaTitle: result.metaTitle,
+              metaKeywords: result.metaKeywords,
+              canonicalUrl: result.canonicalUrl,
+            } as any,
+          },
+        ],
+      }).catch(() => undefined);
+
       return res.status(200).json({
         success: true,
         message: "SEO settings saved successfully",

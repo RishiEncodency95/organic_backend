@@ -1,7 +1,15 @@
 import { Router } from "express";
 import { seoController } from "./seo.controller";
+import { aiContentAuditController } from "./aiContentAudit.controller";
+import { keywordPlannerController } from "./keywordPlanner.controller";
 
 const router = Router();
+
+// AI Content Audit (Plagiarism & ChatGPT detection)
+router.post("/content-audit", aiContentAuditController.auditContent);
+
+// Keyword Planner (Dual Mode: Google Ads API & AI Generator)
+router.post("/keyword-planner", keywordPlannerController.planKeywords);
 
 // Auto-generation route
 router.post("/generate", seoController.generate);
