@@ -29,6 +29,7 @@ export const aiContentAuditController = {
       let readabilityGrade = "Good (Grade 8-10)";
       let verdict = "Human-written & Original";
       let feedback: string[] = [];
+      let aiAnalyzed = false;
 
       const prompt = `You are an expert AI content detector, plagiarism analyst, and SEO content evaluator.
 Analyze the following website content text.
@@ -60,7 +61,7 @@ Return ONLY valid JSON matching this schema:
       if (geminiKey) {
         try {
           const gemRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -81,10 +82,12 @@ Return ONLY valid JSON matching this schema:
               flaggedPhrases = parsed.flaggedPhrases || [];
               verdict = parsed.verdict || "Audited";
               feedback = parsed.suggestions || [];
+              aiAnalyzed = true;
             }
           }
         } catch {}
-      } else if (openaiKey) {
+      }
+      if (!aiAnalyzed && openaiKey) {
         try {
           const oaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
@@ -110,10 +113,12 @@ Return ONLY valid JSON matching this schema:
               flaggedPhrases = parsed.flaggedPhrases || [];
               verdict = parsed.verdict || "Audited";
               feedback = parsed.suggestions || [];
+              aiAnalyzed = true;
             }
           }
         } catch {}
-      } else {
+      }
+      if (!aiAnalyzed) {
         // Algorithmic heuristic fallback if no AI key configured yet
         const roboticWords = ["delve", "testament", "tapestry", "moreover", "in conclusion", "furthermore", "realm", "beacon"];
         let hits = 0;

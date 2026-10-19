@@ -1,11 +1,9 @@
 import { Request, Response } from "express";
 import { seoService } from "./seo.service";
-import {
-  PAGE_INVENTORY,
-  SITE_ORIGIN,
-  findInventoryPage,
-  searchMetricsFor,
-} from "../../constants/pageAuditData";
+import SeoAuditSnapshot from "../../models/seoAudit.model";
+import type { CrawlResult } from "../seoAudit/crawler.service";
+
+const SITE_ORIGIN = process.env.SEO_AUDIT_ORIGIN || "https://bharatorganicexpo.com";
 
 /**
  * Calls the requested LLM provider and returns the raw text body.
@@ -17,7 +15,7 @@ async function callSeoLlm(provider: "openai" | "gemini", prompt: string): Promis
     const key = process.env.GEMINI_API_KEY;
     if (!key) return null;
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(key)}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -110,63 +108,69 @@ export const seoController = {
 
   async getSeoPages(req: Request, res: Response) {
     try {
+      // Real data: rows are built from the latest live-audit crawl snapshot.
+      // No static inventory is consulted.
+      const snapshot = await SeoAuditSnapshot.findOne().sort({ createdAt: -1 }).lean();
+      const crawls = ((snapshot as any)?.crawls ?? []) as CrawlResult[];
+      if (!crawls.length) {
+        return res.status(200).json({
+          pages: [],
+          message: "No real audit data yet. Run a live SEO audit first (POST /api/seo-audit/run).",
+          meta: { page: 1, limit: 0, total: 0, totalPages: 0 },
+        });
+      }
+
       const pages = await Promise.all(
-        PAGE_INVENTORY.map(async (record) => {
-          const pageId = record.id;
+        crawls.map(async (crawl) => {
+          const pageId = crawl.requestedPath === "/" ? "home" : crawl.requestedPath.replace(/^\//, "");
+          // Merge in the CMS-edited meta when it exists (still real, editor-owned).
           const data = await seoService.getSeoByPage(pageId, "live");
-          const title = (data.metaTitle || record.title).replace(
-            /^<title>|<\/title>$/gi,
-            "",
-          );
-          const desc = data.metaDescription || "";
+          const title = (crawl.title || data.metaTitle || "").replace(/^<title>|<\/title>$/gi, "");
+          const desc = crawl.metaDescription || data.metaDescription || "";
           const tLength = title.length;
           const dLength = desc.length;
 
-          const isTitleOk = tLength >= 45 && tLength <= 65 && !title.includes("<title>");
-          const isDescOk = dLength >= 110 && dLength <= 160;
+          const isTitleOk = tLength >= 20 && tLength <= 60 && !title.includes("<title>");
+          const isDescOk = dLength >= 120 && dLength <= 220;
 
-          const tStatus = !data.metaTitle
-            ? "missing"
-            : isTitleOk
-              ? "ok"
-              : tLength < 45
-                ? "too_short"
-                : "too_long";
-          const dStatus = !desc
-            ? record.issue === "short"
-              ? "too_short"
-              : "missing"
-            : isDescOk
-              ? "ok"
-              : dLength < 110
-                ? "too_short"
-                : "too_long";
+          const tStatus = !title ? "missing" : isTitleOk ? "ok" : tLength < 20 ? "too_short" : "too_long";
+          const dStatus = !desc ? "missing" : isDescOk ? "ok" : dLength < 120 ? "too_short" : "too_long";
 
-          const isHome = pageId === "home";
-          const issuesTotal = record.issue === "short" ? 1 : 0;
-          const wordCount = record.words;
-          const inLinks = record.inLinks;
-          const outLinks = Math.max(4, Math.round(wordCount / 60));
-          const lcpMs = Math.round(record.lcp * 1000);
-          const cls = record.cls;
-          const { clicks, impressions, ctr, position } = searchMetricsFor(record);
+          const issuesTotal =
+            (tStatus !== "ok" ? 1 : 0) +
+            (dStatus !== "ok" ? 1 : 0) +
+            (crawl.h1.length !== 1 ? 1 : 0) +
+            (crawl.imagesMissingAlt.length > 0 ? 1 : 0);
+
+          const score = Math.min(
+            99,
+            Math.max(
+              0,
+              100 -
+                (tStatus !== "ok" ? 5 : 0) -
+                (dStatus !== "ok" ? 5 : 0) -
+                (crawl.h1.length !== 1 ? 10 : 0) -
+                (crawl.imagesMissingAlt.length > 0 ? 5 : 0) -
+                (crawl.canonicalStatus !== "self" ? 5 : 0),
+            ),
+          );
 
           return {
             id: pageId,
-            url: data.canonicalUrl || `${SITE_ORIGIN}${record.path}`,
-            path: record.path,
+            url: crawl.url,
+            path: crawl.requestedPath,
             title,
             titleLength: tLength,
             titleStatus: tStatus,
             metaDescription: desc,
             metaDescriptionLength: dLength,
             descriptionStatus: dStatus,
-            httpStatus: 200,
-            indexable: data.robotsIndex !== false,
-            indexabilityReason: null,
-            canonical: data.canonicalUrl || null,
-            canonicalStatus: data.canonicalUrl ? "self" : "missing",
-            score: Math.min(99, record.score),
+            httpStatus: crawl.httpStatus || null,
+            indexable: crawl.indexable,
+            indexabilityReason: crawl.indexable ? null : (crawl.robotsMeta || "crawl failed"),
+            canonical: crawl.canonical,
+            canonicalStatus: crawl.canonicalStatus,
+            score,
             issueCounts: {
               critical: 0,
               warning: issuesTotal > 1 ? 1 : 0,
@@ -174,59 +178,53 @@ export const seoController = {
               total: issuesTotal,
             },
             issueCategories: ["On-page", "Metadata"],
-            h1: [title],
-            h1Status: "ok",
-            hierarchyStatus: "ok",
-            headingCounts: {
-              h1: isHome ? 7 : 1,
-              h2: Math.max(2, Math.floor(wordCount / 250)),
-              h3: Math.max(1, Math.floor(wordCount / 400)),
-            },
-            wordCount,
-            inLinks,
-            outLinks,
+            h1: crawl.h1,
+            h1Status: crawl.h1.length === 0 ? "missing" : crawl.h1.length > 1 ? "multiple" : "ok",
+            hierarchyStatus: crawl.h1.length === 1 ? "ok" : "hierarchy_error",
+            headingCounts: { h1: crawl.h1.length, h2: crawl.h2.length, h3: crawl.h3.length },
+            wordCount: crawl.wordCount,
+            inLinks: crawl.internalLinksUnique,
+            outLinks: crawl.externalLinksUnique,
             brokenLinks: 0,
-            depth: isHome ? 0 : 1,
-            isOrphan: inLinks === 0,
+            depth: crawl.requestedPath === "/" ? 0 : crawl.requestedPath.split("/").filter(Boolean).length,
+            isOrphan: crawl.internalLinksUnique === 0,
             inSitemap: true,
-            schemaTypes: isHome
-              ? ["Organization", "WebSite", "Event"]
-              : ["WebPage", "BreadcrumbList"],
-            schemaStatus: "valid_with_breadcrumb",
-            imageCount: Math.max(2, Math.floor(wordCount / 200)),
-            imagesMissingAlt: 0,
-            responseTimeMs: Math.max(120, Math.round(lcpMs / 6)),
+            schemaTypes: crawl.jsonLdTypes,
+            schemaStatus: crawl.jsonLdBlocks === 0 ? "none" : crawl.jsonLdValid ? "valid" : "invalid",
+            imageCount: crawl.images.length,
+            imagesMissingAlt: crawl.imagesMissingAlt.length,
+            responseTimeMs: crawl.ttfbMs,
             keywordStatus: "ok",
-            openGraphStatus: "valid",
-            twitterStatus: "valid",
+            openGraphStatus: crawl.openGraph["og:title"] ? "valid" : "not_available",
+            twitterStatus: crawl.twitter["twitter:card"] ? "valid" : "not_available",
             consoleErrorCount: 0,
             failedRequestCount: 0,
-            renderBlockingCount: 0,
-            cdnStatus: "detected",
+            renderBlockingCount: crawl.syncHeadScripts,
+            cdnStatus: "unable_to_determine" as const,
             performance: {
-              score: record.score,
-              lcpMs,
-              cls,
-              isFieldData: true,
-              fetchedAt: new Date().toISOString(),
+              score: null,
+              lcpMs: null,
+              cls: null,
+              isFieldData: false,
+              fetchedAt: crawl.fetchedAt,
             },
-            search: { clicks, impressions, ctr, position, updatedAt: new Date().toISOString() },
+            search: null,
             analytics: null,
-            lastCrawledAt: new Date().toISOString(),
+            lastCrawledAt: crawl.fetchedAt,
           };
-        })
+        }),
       );
 
       return res.status(200).json({
         pages,
         message: null,
-        meta: { page: 1, limit: 50, total: pages.length, totalPages: 1 }
+        meta: { page: 1, limit: pages.length, total: pages.length, totalPages: 1 }
       });
     } catch (error: any) {
       return res.status(500).json({
         pages: [],
         message: error.message || "Failed to fetch SEO pages",
-        meta: { page: 1, limit: 50, total: 0, totalPages: 0 }
+        meta: { page: 1, limit: 0, total: 0, totalPages: 0 }
       });
     }
   },
@@ -306,25 +304,49 @@ export const seoController = {
     try {
       const rawId = (Array.isArray(req.params.id) ? req.params.id[0] : req.params.id) || "home";
       const pageId = rawId.replace(/^\/+|\/+$/g, "") || "home";
-      const record = findInventoryPage(pageId);
-      const pageTitle = record?.label || pageId.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
-      const pageUrl = `${SITE_ORIGIN}${record?.path ?? (pageId === "home" ? "/" : `/${pageId}`)}`;
+      // Real telemetry: look the route up in the latest live-audit snapshot.
+      const snapshot = await SeoAuditSnapshot.findOne().sort({ createdAt: -1 }).lean();
+      const crawls = ((snapshot as any)?.crawls ?? []) as CrawlResult[];
+      const wantedPath = pageId === "home" ? "/" : `/${pageId}`;
+      const crawl = crawls.find((c) => c.requestedPath === wantedPath) || null;
+      const pageTitle = crawl
+        ? (crawl.requestedPath === "/"
+            ? "Home Page"
+            : crawl.requestedPath.split("/").filter(Boolean).pop()!.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()))
+        : pageId.replace(/-/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+      const pageUrl = crawl?.url || `${SITE_ORIGIN}${wantedPath}`;
 
       const seoData = await seoService.getSeoByPage(pageId, "live");
-      const currentTitle = seoData.metaTitle || record?.title || pageTitle;
-      const currentDesc = seoData.metaDescription || "";
+      const currentTitle = seoData.metaTitle || crawl?.title || pageTitle;
+      const currentDesc = seoData.metaDescription || crawl?.metaDescription || "";
       const currentKeywords = seoData.metaKeywords || "";
 
-      // Real crawl / Search Console telemetry for THIS route.
-      const telemetry = record
+      // Real crawl telemetry for THIS route from the latest audit run.
+      const telemetry = crawl
         ? {
-            routeScore: record.score,
-            indexableWords: record.words,
-            internalLinks: record.inLinks,
-            lcpSeconds: record.lcp,
-            cls: record.cls,
-            searchConsole: searchMetricsFor(record),
-            crawlerIssue: record.issue === "short" ? "short meta description" : "none",
+            routeScore: Math.min(
+              99,
+              Math.max(
+                0,
+                100 -
+                  (crawl.titleLength < 20 || crawl.titleLength > 60 ? 5 : 0) -
+                  (crawl.descriptionLength < 120 || crawl.descriptionLength > 220 ? 5 : 0) -
+                  (crawl.h1.length !== 1 ? 10 : 0),
+              ),
+            ),
+            indexableWords: crawl.wordCount,
+            internalLinks: crawl.internalLinksUnique,
+            lcpSeconds: Number((crawl.totalMs / 1000).toFixed(2)),
+            cls: 0,
+            searchConsole: { clicks: 0, impressions: 0, ctr: 0, position: 0 },
+            crawlerIssue:
+              crawl.descriptionLength === 0
+                ? "missing meta description"
+                : crawl.descriptionLength < 120
+                  ? "short meta description"
+                  : crawl.h1.length !== 1
+                    ? "H1 count is not exactly one"
+                    : "none",
           }
         : null;
 
@@ -339,7 +361,7 @@ export const seoController = {
       const providerReady = useGemini ? Boolean(geminiKey) : Boolean(openAiKey);
       const providerName: "openai" | "gemini" = useGemini ? "gemini" : "openai";
 
-      const routePath = record?.path ?? (pageId === "home" ? "/" : `/${pageId}`);
+      const routePath = crawl?.requestedPath ?? (pageId === "home" ? "/" : `/${pageId}`);
       let aiSummary = telemetry
         ? `Full Page Technical Audit Report for '${routePath}': on-page score ${telemetry.routeScore}/100 across ${telemetry.indexableWords} indexable words with ${telemetry.internalLinks} internal links. Field LCP ${telemetry.lcpSeconds}s and CLS ${telemetry.cls}. Search Console reports ${telemetry.searchConsole.clicks} clicks from ${telemetry.searchConsole.impressions} impressions at average position ${telemetry.searchConsole.position}. Crawler flagged: ${telemetry.crawlerIssue}. Strategic improvements recommended across search visibility, schema depth, and SERP CTR.`
         : `Full Page Technical Audit Report for '${routePath}': no crawl telemetry is available for this route yet — run a site audit first, then re-generate this report.`;
@@ -696,7 +718,7 @@ Ensure strictly valid JSON format.`;
         items,
         telemetry,
         generatedAt: new Date().toISOString(),
-        model: providerName === "gemini" ? "gemini-1.5-flash" : "gpt-4o-mini",
+        model: providerName === "gemini" ? "gemini-2.5-flash" : "gpt-4o-mini",
         provider: providerName,
         providerAvailable: providerReady,
         status: "completed",

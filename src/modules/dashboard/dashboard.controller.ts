@@ -4,6 +4,7 @@ import Seo from "../../models/seo.model";
 import BlogPost from "../../models/blog/blogPost.model";
 import ContactEnquiry from "../../models/contact/contactEnquiry.model";
 import { logger } from "../../utils/logger";
+import { fetchSearchAnalytics, isSearchConsoleConfigured } from "../seoAudit/gsc.service";
 
 // Visitor/buyer registrations live in a separate database. It is optional: when it is not
 // reachable the dashboard shows 0 for those counts instead of crashing the whole server.
@@ -81,6 +82,41 @@ export const dashboardController = {
         }
       }
 
+      // Real Google Search Console data (last 28 days). Falls back to
+      // "not_connected" when credentials are absent or the query fails.
+      const [gscTotals, gscQueries] = await Promise.all([
+        isSearchConsoleConfigured() ? fetchSearchAnalytics(28, "page") : Promise.resolve(null),
+        isSearchConsoleConfigured() ? fetchSearchAnalytics(28, "query") : Promise.resolve(null),
+      ]).catch(() => [null, null] as const);
+
+      const searchConsoleSource = gscTotals?.available
+        ? {
+            status: "connected" as const,
+            updatedAt: new Date().toISOString(),
+            data: {
+              clicks: gscTotals.totals?.clicks ?? 0,
+              impressions: gscTotals.totals?.impressions ?? 0,
+              ctr: gscTotals.totals?.ctr ?? 0,
+              position: gscTotals.totals?.position ?? 0,
+              growth: { clicks: null, impressions: null, ctr: null, position: null },
+              queries: (gscQueries?.available ? gscQueries.pages : [])
+                .slice(0, 10)
+                .map((q) => ({
+                  query: q.page,
+                  clicks: q.clicks,
+                  impressions: q.impressions,
+                  ctr: q.ctr,
+                  position: q.position,
+                })),
+            },
+          }
+        : {
+            status: "not_connected" as const,
+            updatedAt: new Date().toISOString(),
+            data: null,
+            message: gscTotals?.message || "Google Search Console is not connected.",
+          };
+
       const overviewData = {
         generatedAt: new Date().toISOString(),
         sources: {
@@ -111,97 +147,29 @@ export const dashboardController = {
             },
           },
           analytics: {
-            status: "connected",
+            status: "not_connected",
             updatedAt: new Date().toISOString(),
-            data: {
-              users: (visitorCount + buyerCount) > 0 ? (visitorCount + buyerCount) : totalEnquiriesCount * 2,
-              sessions: (visitorCount + buyerCount) > 0 ? (visitorCount + buyerCount) * 3 : totalEnquiriesCount * 5,
-              pageViews: (visitorCount + buyerCount) > 0 ? (visitorCount + buyerCount) * 8 : totalEnquiriesCount * 12,
-              averageSessionSeconds: 180,
-              bounceRate: 28.5,
-              conversions: totalEnquiriesCount,
-              daily: Array.from({ length: 30 }, (_, i) => ({
-                date: new Date(Date.now() - (29 - i) * 86400000).toISOString().split('T')[0],
-                users: Math.max(1, Math.floor((visitorCount + totalEnquiriesCount) / 30) + (i % 3)),
-                pageViews: Math.max(3, Math.floor(((visitorCount + totalEnquiriesCount) * 5) / 30) + (i % 5)),
-              })),
-              pages: [
-                { path: "/", views: Math.ceil(totalEnquiriesCount * 6), visitors: totalEnquiriesCount * 2, averageSessionSeconds: 120, bounceRate: 30.0 },
-                { path: "/book-a-stand", views: Math.ceil(totalEnquiriesCount * 3), visitors: totalEnquiriesCount, averageSessionSeconds: 240, bounceRate: 20.0 },
-                { path: "/buyer-registration", views: Math.ceil(totalEnquiriesCount * 2), visitors: totalEnquiriesCount, averageSessionSeconds: 180, bounceRate: 25.0 },
-                { path: "/visitor-registration", views: Math.ceil(totalEnquiriesCount * 2), visitors: totalEnquiriesCount, averageSessionSeconds: 150, bounceRate: 28.0 },
-              ],
-              growth: { users: 0, sessions: 0, pageViews: 0, averageSession: 0, bounceRate: 0, conversionRate: 0 },
-            },
+            data: null,
+            message: "Google Analytics (GA4) is not connected. Set GA4 credentials to enable real traffic data.",
           },
-          searchConsole: {
-            status: "connected",
-            updatedAt: new Date().toISOString(),
-            data: {
-              clicks: totalEnquiriesCount * 10,
-              impressions: totalEnquiriesCount * 150,
-              ctr: 6.7,
-              position: 8.4,
-              growth: { clicks: 0, impressions: 0, ctr: 0, position: 0 },
-              queries: [
-                { query: "bharat organic expo", clicks: Math.ceil(totalEnquiriesCount * 4), impressions: totalEnquiriesCount * 50, ctr: 8.0, position: 1.5 },
-                { query: "organic food exhibition india", clicks: Math.ceil(totalEnquiriesCount * 3), impressions: totalEnquiriesCount * 40, ctr: 7.5, position: 2.2 },
-                { query: "book stall organic expo", clicks: Math.ceil(totalEnquiriesCount * 2), impressions: totalEnquiriesCount * 30, ctr: 6.6, position: 1.8 },
-              ],
-            },
-          },
+          searchConsole: searchConsoleSource,
           pageSpeed: {
-            status: "connected",
+            status: "not_connected",
             updatedAt: new Date().toISOString(),
-            data: {
-              strategy: "desktop",
-              lighthouseAvailable: true,
-              performanceScore: calculatedSeoHealth,
-              seoScore: calculatedSeoHealth,
-              lcp: 1.2,
-              inp: 45,
-              cls: 0.01,
-              fcp: 0.8,
-              ttfb: 0.1,
-              tbt: 20,
-              seoChecks: [
-                { key: "title", label: "Page title present", status: "good", score: 100 },
-                { key: "meta-description", label: "Meta description present", status: "good", score: 100 },
-                { key: "canonical", label: "Canonical tag valid", status: "good", score: 100 },
-                { key: "og-tags", label: "Open Graph (OG) social tags active", status: "good", score: 100 },
-                { key: "sitemap-robots", label: "Robots.txt & XML sitemap indexed", status: "good", score: 100 },
-              ],
-            },
+            data: null,
+            message: "Run the SEO Audit for real Google PageSpeed Insights scores.",
           },
           indexCoverage: {
-            status: "connected",
+            status: "not_connected",
             updatedAt: new Date().toISOString(),
-            data: {
-              indexed: totalPagesCount,
-              total: totalPagesCount,
-              notIndexed: 0,
-              urls: [
-                { url: `${process.env.SITE_URL || "https://bharatorganicexpo.com/"}`, indexed: true, coverageState: "Submitted and indexed" },
-              ],
-            },
+            data: null,
+            message: "Google Search Console index coverage requires a connected service account.",
           },
           siteStatus: {
-            status: "connected",
+            status: "not_connected",
             updatedAt: new Date().toISOString(),
-            data: {
-              online: true,
-              responseTimeMs: 85,
-              httpStatus: 200,
-              sslValid: true,
-              sslExpiresAt: "2027-03-31T00:00:00Z",
-              sslIssuer: "Let's Encrypt",
-              certificateDaysRemaining: 204,
-              finalUrl: process.env.SITE_URL || "https://bharatorganicexpo.com",
-              redirected: false,
-              ipAddress: "76.76.21.21",
-              securityHeaders: { present: 6, total: 6 },
-              nodeVersion: process.version || "v20.0.0",
-            },
+            data: null,
+            message: "Site status probing is not configured.",
           },
         },
       };

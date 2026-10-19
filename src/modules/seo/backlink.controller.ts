@@ -40,20 +40,22 @@ export const backlinkController = {
 
       return res.status(200).json({
         success: true,
-        data: backlinks,
-        meta: {
-          total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit),
-        },
-        stats: {
-          total: totalCount,
-          active: activeCount,
-          lost: lostCount,
-          broken: brokenCount,
-          dofollow: dofollowCount,
-          nofollow: nofollowCount,
+        data: {
+          items: backlinks,
+          meta: {
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+          },
+          stats: {
+            total: totalCount,
+            active: activeCount,
+            lost: lostCount,
+            broken: brokenCount,
+            dofollow: dofollowCount,
+            nofollow: nofollowCount,
+          },
         },
       });
     } catch (error: any) {

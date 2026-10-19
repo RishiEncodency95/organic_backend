@@ -80,7 +80,7 @@ REQUIRED JSON RESPONSE STRUCTURE:
   "explanation": "Summary paragraph explaining how the candidate aligns with this job."
 }`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
   // Plain fetch never times out on its own, so a stalled connection here would
   // hang /cv/analyze forever — bound it so the pipeline can fail over instead.
