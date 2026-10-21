@@ -14,6 +14,7 @@ import { apiLimiter } from "./middlewares/rateLimiter.middleware";
 import { activityLogger } from "./middlewares/activityLog.middleware";
 import { apiBlockGuard } from "./modules/apiLimits/apiLimits.service";
 import router from "./routes/index";
+import { lazyInfraRouter } from "./modules/infrastructure/infra.permissions";
 import { generateSitemapXml } from "./modules/seo/sitemap.controller";
 
 const app = express();
@@ -69,6 +70,10 @@ app.use((req, res, next) => {
 
 
 // ─── General Middlewares ──────────────────────────────────────────────────────
+
+// Infrastructure collector pushes are mounted before the global 50 MB parser: they carry their own 256 KB cap and
+// per-collector rate limit, and are machine traffic (not admin actions for the Activity Log).
+app.use(["/api/v1/infrastructure/ingest", "/api/infrastructure/ingest"], lazyInfraRouter(() => import("./modules/infrastructure/infra.ingest.routes"), "infraIngestRouter"));
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));

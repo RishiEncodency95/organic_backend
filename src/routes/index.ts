@@ -52,6 +52,7 @@ import buyerConfigRouter from "../modules/dropdowns/buyerConfig.routes";
 import systemServicesRouter from "../modules/systemServices/systemServices.routes";
 import chatRouter from "../modules/chat/chat.routes";
 import chatbotRouter from "../modules/chatbot/chatbot.routes";
+import { lazyInfraRouter } from "../modules/infrastructure/infra.permissions";
 
 const router = Router();
 
@@ -65,6 +66,9 @@ router.get("/health", (req, res) => {
 });
 
 // API Routes
+// Infrastructure (Servers & Domains): opt-in via INFRASTRUCTURE_ENABLED=true. The router is imported lazily, so a
+// disabled deployment never registers the module's models or touches the database.
+router.use("/infrastructure", lazyInfraRouter(() => import("../modules/infrastructure/infra.routes")));
 router.use("/system-services", systemServicesRouter);
 router.use("/", chatRouter);
 router.use("/", chatbotRouter);

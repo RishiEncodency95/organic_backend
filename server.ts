@@ -17,6 +17,10 @@ const startServer = async (): Promise<void> => {
     await seedSystemServicesIfEmpty();
     // Notification Settings: reassign / report enquiries not answered in time
     startEnquirySweep();
+    // Infrastructure module (opt-in): indexes + the lease-locked background sweep
+    if (process.env.INFRASTRUCTURE_ENABLED === "true") {
+      await (await import("./src/modules/infrastructure/infra.init")).initInfrastructure();
+    }
 
     const server = app.listen(env.PORT, () => {
       // ─── Startup Status ───────────────────────────────
