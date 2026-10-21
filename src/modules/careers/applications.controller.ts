@@ -183,7 +183,7 @@ export const updateApplication = async (req: Request, res: Response): Promise<vo
 export const submitApplication = async (req: Request, res: Response): Promise<void> => {
   try {
     const targetId = String(req.params.id);
-    const { candidateData, whyInterested } = req.body;
+    const { candidateData, whyInterested, applicationDetails } = req.body;
 
     let application = await Application.findOne({ applicationId: targetId })
       .populate("candidateId")
@@ -243,6 +243,11 @@ export const submitApplication = async (req: Request, res: Response): Promise<vo
 
     if (whyInterested) {
       application.whyInterested = whyInterested;
+    }
+    if (applicationDetails && typeof applicationDetails === "object" && !Array.isArray(applicationDetails)) {
+      // Only plain answers; capped so a crafted request cannot bloat the record
+      const json = JSON.stringify(applicationDetails);
+      if (json.length <= 20_000) application.applicationDetails = JSON.parse(json);
     }
 
     // Validate essential contact fields

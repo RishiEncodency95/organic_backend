@@ -1,5 +1,26 @@
 const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
+const WordExtractor = require("word-extractor");
+
+const decodeEntities = (s: string) =>
+  s
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+
+/** One line per line, no runs of blank lines or stray spaces */
+const tidy = (s: string) =>
+  s
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((l) => l.replace(/[ \t\u00a0]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
 
 export const extractTextFromCv = async (
   fileBuffer: Buffer,
@@ -19,14 +40,31 @@ export const extractTextFromCv = async (
       }
     }
 
-    if (isDocx) {
+    // Old binary Word (.doc) files are OLE containers (D0 CF 11 E0), which mammoth cannot read
+    const isOle = fileBuffer.length > 8 && fileBuffer.readUInt32BE(0) === 0xd0cf11e0;
+    if (isOle) {
       try {
-        const result = await mammoth.extractRawText({ buffer: fileBuffer });
-        if (result.value && result.value.trim()) {
-          return result.value.trim();
-        }
+        const doc = await new WordExtractor().extract(fileBuffer);
+        const text = [doc.getHeaders?.({ includeFooters: false }), doc.getBody()].filter(Boolean).join("\n");
+        if (text.trim()) return tidy(text);
       } catch (docErr) {
-        console.warn("Mammoth DOCX extraction warning:", docErr);
+        console.warn("DOC extraction warning:", (docErr as Error).message);
+      }
+    } else if (isDocx) {
+      try {
+        // Via HTML so line breaks inside a paragraph (Shift+Enter) stay separate lines —
+        // raw text glues "Company" and "Mar 2022 – Present" together
+        const { value } = await mammoth.convertToHtml({ buffer: fileBuffer });
+        const text = decodeEntities(
+          String(value || "")
+            .replace(/<br\s*\/?>/gi, "\n")
+            .replace(/<\/(p|h[1-6]|li|tr|div)>/gi, "\n")
+            .replace(/<\/t[dh]>/gi, " | ")
+            .replace(/<[^>]+>/g, "")
+        );
+        if (text.trim()) return tidy(text);
+      } catch (docErr) {
+        console.warn("Mammoth DOCX extraction warning:", (docErr as Error).message);
       }
     }
 

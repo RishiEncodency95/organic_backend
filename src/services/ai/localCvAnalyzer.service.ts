@@ -139,6 +139,105 @@ export function estimateYears(cv: string): number {
   return Math.round(Math.max(stated, total) * 10) / 10;
 }
 
+const SECTION_HEADING = /^(professional\s+)?(summary|profile|objective|experience|work experience|employment( history)?|education|academic|qualifications?|skills|technical skills|key skills|certifications?|projects|achievements|languages|hobbies|interests|personal details|declaration|references)\s*:?$/i;
+const RANGE_IN_LINE = new RegExp(`((?:(?:${"jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec"})[a-z]*\\.?\\s*)?(?:19|20)\\d{2}\\s*(?:-|–|—|to)\\s*(?:(?:(?:${"jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec"})[a-z]*\\.?\\s*)?(?:19|20)\\d{2}|present|current|now|till date|ongoing))`, "i");
+
+const cleanLine = (l: string) => l.replace(/^[•●▪■◦\-*\s]+/, "").replace(/\s+/g, " ").trim();
+
+/** CV lines grouped under their section heading ("education", "experience", …) */
+function sections(cv: string): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  let current = "top";
+  for (const raw of cv.split(/\r?\n/)) {
+    const line = cleanLine(raw);
+    if (!line) continue;
+    const head = line.match(SECTION_HEADING);
+    if (head && line.length < 40) {
+      const h = head[0].toLowerCase();
+      current = /educat|academic|qualif/.test(h) ? "education" : /experience|employment/.test(h) ? "experience" : /skill/.test(h) ? "skills" : /certif/.test(h) ? "certifications" : /achiev/.test(h) ? "achievements" : /language/.test(h) ? "languages" : h;
+      continue;
+    }
+    (out[current] ||= []).push(line);
+  }
+  return out;
+}
+
+/** One line per qualification, e.g. "B.Tech in Computer Science, AKTU — 2016 – 2020" */
+function extractEducation(cv: string, sec: Record<string, string[]>): string[] {
+  const pool = sec.education?.length ? sec.education : cv.split(/\r?\n/).map(cleanLine);
+  return [...new Set(pool.filter((l) => l.length < 180 && EDUCATION_LINE.test(l) && !/^\d+(\.\d+)?\s*\+?\s*years?/i.test(l)))].slice(0, 6);
+}
+
+/** One line per job: "Designation — Company | Mar 2022 – Present | what they did" */
+function extractExperience(cv: string, sec: Record<string, string[]>): string[] {
+  const lines = sec.experience?.length ? sec.experience : cv.split(/\r?\n/).map(cleanLine).filter(Boolean);
+  const jobs: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const range = lines[i].match(RANGE_IN_LINE);
+    if (!range || EDUCATION_LINE.test(lines[i])) continue;
+    const trim = (x: string) => x.replace(/[,.|()\s–—-]+$/, "").replace(/^[,.|()\s–—-]+/, "").trim();
+    const at = lines[i].indexOf(range[0]);
+    const before = trim(lines[i].slice(0, at));
+    const after = trim(lines[i].slice(at + range[0].length));
+    const title = before.length > 3 ? before : lines[i - 1] && !lines[i - 1].match(RANGE_IN_LINE) ? lines[i - 1] : "";
+    const nextLine = lines[i + 1] && !lines[i + 1].match(RANGE_IN_LINE) && !(lines[i + 2] && lines[i + 2].match(RANGE_IN_LINE) && lines[i + 1].length < 70) ? lines[i + 1] : "";
+    const detail = [after, nextLine].filter((x) => x.length > 3).join(" ");
+    jobs.push([title, range[0], detail.slice(0, 160)].filter(Boolean).join(" | "));
+  }
+  return jobs.slice(0, 6);
+}
+
+/** Skills the CV lists itself ("Skills: React, Node.js …") plus the job skills it proves */
+function extractSkills(sec: Record<string, string[]>, cv: string, proven: string[], experience: string[]): string[] {
+  // Without a skills section, short comma lists in the job descriptions ("Tally ERP, GST filing, audit")
+  const fromWork = sec.skills?.length
+    ? []
+    : experience
+        .map((e) => e.split(" | ").slice(2).join(" "))
+        .flatMap((d) => d.split(/[,;]|\.\s+| and | \/ /))
+        .map((x) => x.replace(/^(built|worked on|handled|managed|end-to-end)\s+/i, "").replace(/\.$/, "").trim())
+        .filter((x) => x.split(/\s+/).length <= 4 && x.length > 2 && !/^\d/.test(x));
+  const listed = [...(sec.skills || []), ...cv.split(/\r?\n/).filter((l) => /^\s*(technical\s+|key\s+)?skills\s*[:\-]/i.test(l)), ...fromWork]
+    .map((l) => l.replace(/^\s*(technical\s+|key\s+)?skills\s*[:\-]\s*/i, ""))
+    .flatMap((l) => l.split(/[,|•;]/))
+    .map((x) => x.trim())
+    .filter((x) => x.length > 1 && x.length < 40);
+  const seen = new Set<string>();
+  const kept = listed.filter((x) => {
+    const k = x.toLowerCase();
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  // A proven keyword already inside a listed skill ("next.js" in "Next.js frontends") adds nothing
+  const extra = proven.filter((p) => !kept.some((k) => k.toLowerCase().includes(p.toLowerCase())));
+  // As the CV writes it ("KPI", "HR policies"), not our lowercase keyword
+  const asWritten = (p: string) => cv.match(new RegExp(`(?<![a-z0-9])${escapeRe(p)}(?![a-z0-9])`, "i"))?.[0] ?? p;
+  return [...kept, ...extra.map(asWritten)].slice(0, 14);
+}
+
+/** The city on the contact line ("rohit@gmail.com | 98765 43210 | Noida, Uttar Pradesh") */
+function guessLocation(cv: string): string | null {
+  for (const line of cv.split(/\r?\n/).slice(0, 6)) {
+    if (!/[|•·]/.test(line)) continue;
+    for (const part of line.split(/[|•·]/).map((x) => x.trim())) {
+      if (!part || part.length > 40 || /@|linkedin|github|http|www\./i.test(part) || (part.match(/\d/g) || []).length >= 6) continue;
+      if (/^[A-Za-z][A-Za-z .,'-]+$/.test(part)) return part;
+    }
+  }
+  const m = cv.match(/(?:location|address|city)\s*[:\-]\s*([A-Za-z][A-Za-z .,'-]{2,40})/i);
+  return m ? m[1].trim() : null;
+}
+
+/** The job still running ("… – Present"), else the latest one: its company and designation */
+function currentJob(jobs: string[]): { company: string | null; designation: string | null } {
+  const job = jobs.find((j) => /present|current|till date|ongoing|now/i.test(j.split(" | ")[1] || "")) || jobs[0];
+  if (!job) return { company: null, designation: null };
+  const head = job.split(" | ")[0];
+  const parts = head.split(/\s+at\s+|\s[—–]\s|\s-\s|,\s*/i).map((x) => x.trim()).filter(Boolean);
+  return { designation: parts[0] || null, company: parts[1] || null };
+}
+
 /** First line that looks like a person's name */
 function guessName(cv: string): string | null {
   for (const line of cv.split(/\r?\n/).slice(0, 8)) {
@@ -160,6 +259,9 @@ export function analyzeCvLocally(
   contact: { email: string | null; phone: string | null; phones: string[]; linkedin: string | null }
 ): AIAnalysisOutput {
   const cv = lower(cvText);
+  const sec = sections(cvText);
+  const workHistory = extractExperience(cvText, sec);
+  const current = currentJob(workHistory);
 
   // ── Skills ──
   const jobSkills = job.skills.length ? job.skills : job.requirements.flatMap(significantTokens).slice(0, 8);
@@ -291,16 +393,16 @@ export function analyzeCvLocally(
       phone: contact.phone,
       phones: contact.phones,
       linkedin: contact.linkedin,
-      location: inLocation ? job.location : null,
+      location: guessLocation(cvText),
       gender: null,
     },
-    education: [],
-    experience: [],
-    skills: [...new Set(skillEvidence)],
-    achievements: [],
-    languages: [],
-    currentCompany: null,
-    currentDesignation: null,
+    education: extractEducation(cvText, sec),
+    experience: workHistory,
+    skills: extractSkills(sec, cvText, [...new Set(skillEvidence)], workHistory),
+    achievements: [...(sec.certifications || []), ...(sec.achievements || [])].filter((l) => l.length < 160).slice(0, 6),
+    languages: (sec.languages || []).flatMap((l) => l.split(/[,|•]/)).map((x) => x.trim()).filter((x) => x && x.length < 30).slice(0, 6),
+    currentCompany: current.company,
+    currentDesignation: current.designation,
     totalExperience: years ? `${years} Years` : null,
     noticePeriod: null,
     currentCTC: null,

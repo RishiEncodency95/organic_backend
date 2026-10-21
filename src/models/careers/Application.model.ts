@@ -23,6 +23,8 @@ export interface IApplication extends Document {
   scoreSnapshot: any;
   status: ApplicationStatus;
   whyInterested?: string;
+  /** "Complete Your Application" answers: locations, joining, references, consents, … */
+  applicationDetails?: Record<string, unknown>;
   notes?: string;
   submittedAt?: Date;
   hrStatus?: string;
@@ -67,6 +69,7 @@ const ApplicationSchema: Schema = new Schema(
       index: true,
     },
     whyInterested: { type: String },
+    applicationDetails: { type: Schema.Types.Mixed },
     notes: { type: String },
     submittedAt: { type: Date },
     // HR pipeline set from the admin "Applications & AI Response" screen. Kept separate from
