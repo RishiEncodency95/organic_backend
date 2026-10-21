@@ -286,7 +286,9 @@ export function deriveRates(prev: Counters | null, cur: Counters): DerivedRates 
     let cpuReset = false;
     for (const k of keys) {
       const d = (cur.cpu[k] ?? 0) - (prev.cpu[k] ?? 0);
-      if (d < 0) cpuReset = true;
+      // iowait is documented as non-monotonic in /proc/stat (it can step back on VMs): that alone is not a reboot.
+      // A real reset (reboot / agent restart) moves user, system or idle backwards too.
+      if (d < 0 && k !== 'iowait') cpuReset = true;
       delta[k] = Math.max(0, d);
       total += delta[k]!;
     }

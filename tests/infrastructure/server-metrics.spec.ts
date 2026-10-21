@@ -199,3 +199,20 @@ describe('Contabo detail mapping (schema verified against the live API)', () => 
     await expect(new ContaboAdapter(fetchImpl as never).getServerExtras({ clientId: 'a', clientSecret: 'b', apiUser: 'c', apiPassword: 'd' }, '../etc')).rejects.toThrow();
   });
 });
+
+describe('cpu rate with a non-monotonic iowait counter', () => {
+  it('still reports CPU when only iowait stepped backwards', () => {
+    const prev = { at: 0, cpu: { user: 1000, nice: 0, system: 500, idle: 8000, iowait: 300, irq: 0, softirq: 10, steal: 0 } };
+    const cur = { at: 60_000, cpu: { user: 1100, nice: 0, system: 550, idle: 8800, iowait: 299, irq: 0, softirq: 12, steal: 0 } };
+    const r = deriveRates(prev as never, cur as never);
+    expect(r.counterReset).toBe(false);
+    expect(r.cpuPct).not.toBeNull();
+  });
+  it('still treats user/idle going backwards as a reset', () => {
+    const prev = { at: 0, cpu: { user: 1000, system: 500, idle: 8000, iowait: 300 } };
+    const cur = { at: 60_000, cpu: { user: 10, system: 5, idle: 80, iowait: 3 } };
+    const r = deriveRates(prev as never, cur as never);
+    expect(r.counterReset).toBe(true);
+    expect(r.cpuPct).toBeNull();
+  });
+});
