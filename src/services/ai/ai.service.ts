@@ -1,8 +1,9 @@
 import { analyzeCvWithOpenAI, AIAnalysisOutput } from "./openai.service";
 import { analyzeCvWithGemini } from "./gemini.service";
+import { analyzeCvLocally } from "./localCvAnalyzer.service";
 
 export interface UnifiedAnalysisResult {
-  provider: "OpenAI" | "Gemini";
+  provider: "OpenAI" | "Gemini" | "Local";
   extractedProfile: {
     candidate: {
       name: string | null;
@@ -147,7 +148,7 @@ export const runCvAnalysisPipeline = async (
   }
 ): Promise<UnifiedAnalysisResult> => {
   let aiOutput: AIAnalysisOutput | null = null;
-  let provider: "OpenAI" | "Gemini" = "OpenAI";
+  let provider: "OpenAI" | "Gemini" | "Local" = "OpenAI";
 
   // Regex extraction for contact info as secondary guarantee
   let regexEmail: string | null = null;
@@ -185,63 +186,17 @@ export const runCvAnalysisPipeline = async (
       aiOutput = await analyzeCvWithGemini(cvText, jobDescription);
       provider = "Gemini";
     } catch (geminiError) {
-      console.warn("⚠️ Gemini fallback also failed, running local deterministic analyzer...");
-      
-      // Heuristic analysis score based on keyword match
-      const lowerCv = cvText.toLowerCase();
-      let matchedCount = 0;
-      const matchedReqs: string[] = [];
-      const missingReqs: string[] = [];
-
-      for (const req of jobDescription.requirements) {
-        const keywords = req.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-        const hasMatch = keywords.some(k => lowerCv.includes(k));
-        if (hasMatch) {
-          matchedCount++;
-          matchedReqs.push(req);
-        } else {
-          missingReqs.push(req);
-        }
-      }
-
-      const ratio = jobDescription.requirements.length > 0 ? matchedCount / jobDescription.requirements.length : 0.7;
-      const heuristicScore = Math.round(ratio * 100);
-
-      aiOutput = {
-        candidate: {
-          name: null,
-          email: regexEmail,
-          phone: regexPhone,
-          phones: regexPhones,
-          linkedin: regexLinkedin,
-          location: lowerCv.includes("delhi") || lowerCv.includes("noida") || lowerCv.includes("gurugram") ? "Delhi NCR" : null,
-          gender: null,
-        },
-        education: [],
-        experience: [],
-        skills: jobDescription.skills.filter(s => lowerCv.includes(s.toLowerCase())),
-        achievements: [],
-        languages: [],
-        currentCompany: null,
-        currentDesignation: null,
-        totalExperience: null,
-        noticePeriod: null,
-        currentCTC: null,
-        expectedCTC: null,
-        evaluation: {
-          relevantExperience: { score: heuristicScore, evidence: matchedReqs },
-          skills: { score: Math.round(heuristicScore * 0.9), matched: jobDescription.skills.filter(s => lowerCv.includes(s.toLowerCase())), missing: [] },
-          education: { score: lowerCv.includes("mba") || lowerCv.includes("graduate") || lowerCv.includes("bachelor") ? 90 : 60, evidence: [] },
-          industryExperience: { score: lowerCv.includes("sales") || lowerCv.includes("exhibition") || lowerCv.includes("event") ? 80 : 40, evidence: [] },
-          roleFit: { score: heuristicScore, evidence: [] },
-          location: { score: lowerCv.includes("delhi") || lowerCv.includes("noida") || lowerCv.includes("gurugram") ? 100 : 70, evidence: [] },
-        },
-        matchedRequirements: matchedReqs,
-        missingRequirements: missingReqs,
-        strengths: matchedReqs,
-        gaps: missingReqs,
-        explanation: "Candidate evaluated based on skills and requirement keywords from CV.",
-      };
+      console.warn("⚠️ Gemini fallback also failed:", (geminiError as Error).message.slice(0, 200));
+      console.log("🧮 Running local rule-based CV analyzer...");
+      // Reads the CV for real evidence (years, skills, degree, domain, location), so
+      // each CV gets its own score instead of a near-identical keyword ratio.
+      provider = "Local";
+      aiOutput = analyzeCvLocally(cvText, jobDescription, {
+        email: regexEmail,
+        phone: regexPhone,
+        phones: regexPhones,
+        linkedin: regexLinkedin,
+      });
     }
   }
 
@@ -320,12 +275,9 @@ export const runCvAnalysisPipeline = async (
         evidence: aiOutput.evaluation.location?.evidence || [],
       },
     },
-    matchedRequirements: fillToFive(
-      aiOutput.matchedRequirements || [],
-      aiOutput.strengths || [],
-      jobDescription.requirements,
-      jobDescription.skills
-    ),
+    // Only what the CV actually shows: padding with the job's own requirements made every
+    // candidate look like they met them.
+    matchedRequirements: fillToFive(aiOutput.matchedRequirements || [], aiOutput.strengths || []),
     missingRequirements: aiOutput.missingRequirements || [],
     strengths: aiOutput.strengths || [],
     gaps: aiOutput.gaps || [],
@@ -333,7 +285,7 @@ export const runCvAnalysisPipeline = async (
   };
 };
 
-/** The UI always shows 5 "key requirements met" bullets, so pad with strengths/job data rather than trust the model's count. */
+/** At most 5 "key requirements met" bullets, from the CV's matched requirements then its strengths. */
 function fillToFive(...sources: string[][]): string[] {
   const result: string[] = [];
   for (const source of sources) {

@@ -80,26 +80,39 @@ REQUIRED JSON RESPONSE STRUCTURE:
   "explanation": "Summary paragraph explaining how the candidate aligns with this job."
 }`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  // gemini-1.5-flash was retired (404). Try the current stable model first, then the
+  // "latest" alias so a future retirement does not silently break CV scoring again.
+  const models = [process.env.GEMINI_MODEL, "gemini-2.5-flash", "gemini-flash-latest"].filter(Boolean) as string[];
+  let response: Response | null = null;
+  let lastError = "";
 
-  // Plain fetch never times out on its own, so a stalled connection here would
-  // hang /cv/analyze forever — bound it so the pipeline can fail over instead.
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        temperature: 0.1,
-      },
-    }),
-    signal: AbortSignal.timeout(20_000),
-  });
+  for (const model of models) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    // Plain fetch never times out on its own, so a stalled connection here would
+    // hang /cv/analyze forever — bound it so the pipeline can fail over instead.
+    const attempt = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0.1,
+        },
+      }),
+      signal: AbortSignal.timeout(45_000),
+    });
+    if (attempt.ok) {
+      response = attempt;
+      break;
+    }
+    lastError = `${model}: ${attempt.status} ${(await attempt.text()).slice(0, 300)}`;
+    // Only a missing model is worth retrying with the next name
+    if (attempt.status !== 404) break;
+  }
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} ${errText}`);
+  if (!response) {
+    throw new Error(`Gemini API error: ${lastError}`);
   }
 
   const resData = (await response.json()) as any;

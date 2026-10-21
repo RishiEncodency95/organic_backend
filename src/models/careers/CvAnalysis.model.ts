@@ -13,7 +13,8 @@ export interface ICvAnalysis extends Document {
   candidateId: mongoose.Types.ObjectId;
   jobId: mongoose.Types.ObjectId;
   cvId?: string;
-  provider: "OpenAI" | "Gemini";
+  /** "Local": the rule-based analyzer ran because no AI provider answered */
+  provider: "OpenAI" | "Gemini" | "Local";
   status: "UPLOADED" | "PARSING" | "ANALYZING" | "MATCHING" | "COMPLETED" | "FAILED";
   extractedProfile: any;
   matchScore: number; // Deterministic calculation
@@ -36,7 +37,7 @@ const CvAnalysisSchema: Schema = new Schema(
     candidateId: { type: Schema.Types.ObjectId, ref: "CandidateProfile", required: true },
     jobId: { type: Schema.Types.ObjectId, ref: "Job", required: true },
     cvId: { type: String },
-    provider: { type: String, enum: ["OpenAI", "Gemini"], default: "OpenAI" },
+    provider: { type: String, enum: ["OpenAI", "Gemini", "Local"], default: "OpenAI" },
     status: {
       type: String,
       enum: ["UPLOADED", "PARSING", "ANALYZING", "MATCHING", "COMPLETED", "FAILED"],
