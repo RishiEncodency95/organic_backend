@@ -5,7 +5,7 @@ import Job from "../../models/careers/Job.model";
 import CvAnalysis from "../../models/careers/CvAnalysis.model";
 import Counter from "../../models/careers/Counter.model";
 import ApplicationEvent from "../../models/careers/ApplicationEvent.model";
-import { sendCandidateConfirmationEmail, sendAdminNotificationEmail } from "../../services/email.service";
+import { buildSubmissionEmailData, sendCandidateSubmittedEmail, sendHrNewApplicationEmail } from "../../services/careerSubmissionMail.service";
 
 /**
  * Generate unique, server-side sequential Application ID: BOE<current year>-000001
@@ -292,23 +292,15 @@ export const submitApplication = async (req: Request, res: Response): Promise<vo
       note: "Application submitted successfully by candidate.",
     });
 
-    // Send confirmation email asynchronously
-    const emailOpts = {
-      recipientEmail: candidate.email,
-      candidateName: candidate.name,
-      jobTitle: job.title,
-      applicationId: application.applicationId,
-      matchScore: analysis ? analysis.matchScore : 0,
-      submittedAt: application.submittedAt,
-    };
-
-    sendCandidateConfirmationEmail(emailOpts).catch((err) =>
-      console.error("Candidate email background send error:", err)
-    );
-
-    sendAdminNotificationEmail(emailOpts).catch((err) =>
-      console.error("Admin email background send error:", err)
-    );
+    // Confirmation to the candidate + new-application notice to HR (in the background)
+    buildSubmissionEmailData(application, candidate, job, analysis)
+      .then((data) =>
+        Promise.all([
+          sendCandidateSubmittedEmail(data).catch((err) => console.error("Candidate email background send error:", err)),
+          sendHrNewApplicationEmail(data).catch((err) => console.error("HR email background send error:", err)),
+        ])
+      )
+      .catch((err) => console.error("Submission email build error:", err));
 
     res.status(200).json({
       success: true,

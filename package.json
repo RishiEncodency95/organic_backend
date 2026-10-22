@@ -14,7 +14,8 @@
     "seed:blog": "tsx scripts/seed_blog_sections.ts",
     "seed:credentials": "tsx scripts/seed_credentials.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "test:dropdowns": "tsx scripts/test_dropdowns_api.ts"
+    "test:dropdowns": "tsx scripts/test_dropdowns_api.ts",
+    "careers:send-emails": "tsx scripts/send_career_emails.ts"
   },
   "repository": {
     "type": "git",
@@ -42,6 +43,7 @@
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
     "ioredis": "^6.0.0",
+    "jpeg-js": "^0.4.4",
     "jsonwebtoken": "^9.0.3",
     "mammoth": "^1.12.3",
     "mongoose": "^9.9.5",
@@ -50,6 +52,7 @@
     "nodemailer": "^10.0.10",
     "openai": "^6.49.0",
     "pdf-parse": "^1.1.1",
+    "pngjs": "^5.0.0",
     "qrcode": "^1.5.4",
     "speakeasy": "^2.0.0",
     "swagger-ui-express": "^5.0.1",
@@ -68,6 +71,7 @@
     "@types/node": "^26.5.0",
     "@types/nodemailer": "^8.0.2",
     "@types/pdf-parse": "^1.1.5",
+    "@types/pngjs": "^6.0.5",
     "@types/qrcode": "^1.5.6",
     "@types/speakeasy": "^2.0.10",
     "@types/swagger-ui-express": "^4.1.8",
