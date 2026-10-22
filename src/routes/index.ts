@@ -11,6 +11,7 @@ import advisoryNominationRouter from "../modules/website/abouts/advisory_board_m
 import websiteBlogRouter from "../modules/website/websiteBlog.routes";
 import websiteBlogSlugRouter from "../modules/website/websiteBlogSlug.routes";
 import seoRouter from "../modules/seo/seo.routes";
+import seoAuditRouter from "../modules/seoAudit/seoAudit.routes";
 import advancedSeoRouter from "../modules/seo/advancedSeo.routes";
 import backlinkRouter from "../modules/seo/backlink.routes";
 import settingsRouter from "../modules/settings/settings.routes";
@@ -51,6 +52,7 @@ import buyerConfigRouter from "../modules/dropdowns/buyerConfig.routes";
 import systemServicesRouter from "../modules/systemServices/systemServices.routes";
 import chatRouter from "../modules/chat/chat.routes";
 import chatbotRouter from "../modules/chatbot/chatbot.routes";
+import { lazyInfraRouter } from "../modules/infrastructure/infra.permissions";
 
 const router = Router();
 
@@ -64,6 +66,9 @@ router.get("/health", (req, res) => {
 });
 
 // API Routes
+// Infrastructure (Servers & Domains): opt-in via INFRASTRUCTURE_ENABLED=true. The router is imported lazily, so a
+// disabled deployment never registers the module's models or touches the database.
+router.use("/infrastructure", lazyInfraRouter(() => import("../modules/infrastructure/infra.routes")));
 router.use("/system-services", systemServicesRouter);
 router.use("/", chatRouter);
 router.use("/", chatbotRouter);
@@ -84,10 +89,11 @@ router.use("/settings", settingsRouter);
 router.use("/auth", authRouter);
 router.use("/users/admin", staffRouter);
 router.use("/roles", rolesRouter);
-router.use("/seo", seoRouter);
-router.use("/website/seo", seoRouter);
 router.use("/seo/backlinks", backlinkRouter);
 router.use("/backlinks", backlinkRouter);
+router.use("/seo", seoRouter);
+router.use("/seo-audit", seoAuditRouter);
+router.use("/website/seo", seoRouter);
 router.use("/seo-settings", advancedSeoRouter);
 router.use("/website/seo-settings", advancedSeoRouter);
 router.use("/website", websiteHomeRouter);

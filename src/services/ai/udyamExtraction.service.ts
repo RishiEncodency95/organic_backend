@@ -148,7 +148,7 @@ export const extractUdyamWithGemini = async (input: UdyamDocumentInput): Promise
       ]
     : [{ text: buildTextPrompt(input.text || "") }];
 
-  // gemini-1.5-flash was retired on the Gemini API and now 404s, which silently turned
+  // gemini-2.5-flash was retired on the Gemini API and now 404s, which silently turned
   // this whole fallback into dead weight. Newest first, so a model being retired again
   // costs one wasted request rather than the entire fallback.
   const models = ["gemini-2.5-flash", "gemini-2.0-flash"];

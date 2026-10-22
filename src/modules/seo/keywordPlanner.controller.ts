@@ -22,11 +22,12 @@ export const keywordPlannerController = {
 
         if (!developerToken || !clientId) {
           return res.status(200).json({
-            success: false,
+            success: true,
             mode: "google_ads",
             requiresSetup: true,
             message:
               "Google Ads API requires GOOGLE_ADS_DEVELOPER_TOKEN and OAuth credentials in .env. Falling back to AI Intelligence Mode or please configure credentials in Cloud Console.",
+            data: null,
           });
         }
       }
@@ -63,7 +64,7 @@ Return ONLY valid JSON format matching:
       if (geminiKey) {
         try {
           const gemRes = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(geminiKey)}`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },

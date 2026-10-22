@@ -3,6 +3,7 @@ import { Role } from "../../models/Role.model";
 import asyncHandler from "../../utils/asyncHandler";
 import { ApiResponse } from "../../utils/ApiResponse";
 import { ApiError } from "../../utils/ApiError";
+import { INFRA_PERMISSION_DEFS, infrastructureEnabled } from "../infrastructure/infra.permissions";
 
 const router = Router();
 
@@ -25,6 +26,8 @@ export const SYSTEM_PERMISSIONS = [
   { _id: "perm_enquiries_view", module: "Enquiries & Leads", action: "View", key: "enquiries.view", label: "View Inbound Enquiries" },
   { _id: "perm_enquiries_reply", module: "Enquiries & Leads", action: "Reply", key: "enquiries.reply", label: "Reply to Trade Enquiries" },
   { _id: "perm_settings_manage", module: "System & Settings", action: "Manage", key: "settings.manage", label: "System Alerts & Config" },
+  // Servers & Domains permissions are listed only when the Infrastructure module is enabled
+  ...(infrastructureEnabled() ? INFRA_PERMISSION_DEFS : []),
 ];
 
 // Helper to seed initial system roles if they don't exist
