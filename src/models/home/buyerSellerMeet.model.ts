@@ -59,7 +59,7 @@ const buyerSellerMeetSchema = new Schema({
     type: [statSchema],
     default: [
       { icon: "Users", val: '8,000+', label: 'TRADE VISITORS' },
-      { icon: "Store", val: '200+', label: 'ORGANIC EXHIBITORS' },
+      { icon: "Store", val: '100+', label: 'ORGANIC EXHIBITORS' },
       { icon: "Globe", val: 'GLOBAL', label: 'BUYERS' },
       { icon: "CalendarDays", val: '3 DAYS', label: 'OF NETWORKING' }
     ]

@@ -8,7 +8,7 @@ const exhibitorsHeroSchema = new Schema(
   {
     enabled: { type: Boolean, default: true },
     eyebrow: { type: String, default: "TRUSTED BY" },
-    title: { type: String, default: "150+ Leading Health & Wellness Brands" }, // the page H1
+    title: { type: String, default: "100+ Leading Health & Wellness Brands" }, // the page H1
     description: {
       type: String,
       default:

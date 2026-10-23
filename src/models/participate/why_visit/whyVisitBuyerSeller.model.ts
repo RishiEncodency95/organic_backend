@@ -72,8 +72,8 @@ const whyVisitBuyerSellerSchema = new Schema(
     stats: {
       type: [statSchema],
       default: [
-        { val: "200+", label: "EXHIBITORS", subtext: "Across the Organic Ecosystem" },
-        { val: "100+", label: "SPEAKERS", subtext: "Industry Leaders & Experts" },
+        { val: "100+", label: "EXHIBITORS", subtext: "Across the Organic Ecosystem" },
+        { val: "150+", label: "SPEAKERS", subtext: "Industry Leaders & Experts" },
         { val: "8,000+", label: "BUSINESS VISITORS", subtext: "Traders, Buyers, Retailers & More" },
         { val: "GLOBAL", label: "PARTICIPATION", subtext: "Connecting India with the World" },
       ],

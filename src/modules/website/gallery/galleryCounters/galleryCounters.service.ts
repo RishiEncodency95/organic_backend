@@ -5,9 +5,9 @@ export const DEFAULT_GALLERY_COUNTERS = {
   enabled: true,
   title: "EXPO IMPACT IN NUMBERS",
   items: [
-    { val: "200+", label: "Exhibitors", icon: "Building2", image: "" },
-    { val: "8,000", label: "Visitors", icon: "Users", image: "" },
-    { val: "50+", label: "Expert Speakers", icon: "Mic", image: "" },
+    { val: "100+", label: "Exhibitors", icon: "Building2", image: "" },
+    { val: "8,000+", label: "Visitors", icon: "Users", image: "" },
+    { val: "150+", label: "Expert Speakers", icon: "Mic", image: "" },
     { val: "5,000+", label: "Delegates", icon: "UserCheck", image: "" },
     { val: "25+", label: "Countries Participated", icon: "Globe", image: "" },
     { val: "100+", label: "Sessions Conducted", icon: "Calendar", image: "" },

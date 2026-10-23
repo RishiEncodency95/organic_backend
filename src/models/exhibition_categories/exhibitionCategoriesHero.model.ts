@@ -25,7 +25,7 @@ const exhibitionCategoriesHeroSchema = new Schema(
     features: {
       type: [featureSchema],
       default: [
-        { value: "200+", label: "Exhibitors Expected" },
+        { value: "100+", label: "Exhibitors Expected" },
         { value: "8000+", label: "Business Visitors" },
         { value: "Global", label: "Business Platform" },
         { value: "Endless", label: "Business Opportunities" },

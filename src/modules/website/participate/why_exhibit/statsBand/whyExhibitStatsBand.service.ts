@@ -3,9 +3,9 @@ import { ApiError } from "../../../../../utils/ApiError";
 
 const defaultStats = [
   { val: "8,000+", label: "VISITORS / DELEGATES", icon: "Users", iconName: "Users" },
-  { val: "200+", label: "EXHIBITORS", icon: "Building2", iconName: "Building2" },
+  { val: "100+", label: "EXHIBITORS", icon: "Building2", iconName: "Building2" },
   { val: "1,000+", label: "GLOBAL BUYERS", icon: "Globe", iconName: "Globe" },
-  { val: "65+", label: "EXPERT SPEAKERS", icon: "Mic", iconName: "Mic" },
+  { val: "150+", label: "EXPERT SPEAKERS", icon: "Mic", iconName: "Mic" },
   { val: "B2B", label: "MEETINGS", icon: "Handshake", iconName: "Handshake" },
 ];
 

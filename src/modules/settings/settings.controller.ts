@@ -9,7 +9,7 @@ const defaultFooter = {
   name: "Footer & Social Links",
   enabled: true,
   description:
-    "A global platform uniting over 500+ exhibitors from across the organic value chain, showcasing certified products, advanced agritech, sustainable practices, and the rich heritage of traditional wellness. Discover organic living with conferences and B2B opportunities.",
+    "A global platform uniting over 100+ exhibitors from across the organic value chain, showcasing certified products, advanced agritech, sustainable practices, and the rich heritage of traditional wellness. Discover organic living with conferences and B2B opportunities.",
   // Left empty on purpose: these used to hardcode a local `/uploads/...` URL
   // from the server's disk, which every visitor's browser loaded directly —
   // the frontend's Footer component already falls back to its own bundled

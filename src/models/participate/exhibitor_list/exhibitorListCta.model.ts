@@ -35,7 +35,7 @@ const exhibitorListCtaSchema = new Schema(
     bottomStats: {
       type: [statSchema],
       default: [
-        { value: "200+", label: "Exhibitors" },
+        { value: "100+", label: "Exhibitors" },
         { value: "8,000+", label: "Visitors" },
         { value: "3 Days", label: "Of Knowledge" },
         { value: "PAN India", label: "Participation" },

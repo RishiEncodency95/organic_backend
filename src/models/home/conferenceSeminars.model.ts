@@ -43,7 +43,7 @@ const conferenceSeminarsSchema = new Schema({
   stat2Sub: { type: String, default: 'NEW DELHI' },
   stat3Title: { type: String, default: 'INSIGHTS. IDEAS.' },
   stat3Sub: { type: String, default: 'IMPACT.' },
-  stat4Title: { type: String, default: '50+ GLOBAL' },
+  stat4Title: { type: String, default: '150+ GLOBAL' },
   stat4Sub: { type: String, default: 'SPEAKERS' },
   stat5Title: { type: String, default: '20+ KEY' },
   stat5Sub: { type: String, default: 'SESSIONS' },
@@ -53,7 +53,7 @@ const conferenceSeminarsSchema = new Schema({
       { icon: 'Calendar', title: '19 – 21', sub: 'FEBRUARY 2027' },
       { icon: 'MapPin', title: 'PRAGATI MAIDAN', sub: 'NEW DELHI' },
       { icon: 'Users', title: 'INSIGHTS. IDEAS.', sub: 'IMPACT.' },
-      { icon: 'Mic', title: '50+ GLOBAL', sub: 'SPEAKERS' },
+      { icon: 'Mic', title: '150+ GLOBAL', sub: 'SPEAKERS' },
       { icon: 'BookOpen', title: '20+ KEY', sub: 'SESSIONS' }
     ] 
   },

@@ -39,9 +39,9 @@ const whyVisitHeroSchema = new Schema(
       type: [statSchema],
       default: [
         { val: "8,000+", label: "VISITORS / DELEGATES" },
-        { val: "200+", label: "EXHIBITORS" },
+        { val: "100+", label: "EXHIBITORS" },
         { val: "GLOBAL", label: "PERSPECTIVES" },
-        { val: "100+", label: "EXPERT SPEAKERS" },
+        { val: "150+", label: "EXPERT SPEAKERS" },
         { val: "B2B", label: "MEETINGS" },
       ],
     },

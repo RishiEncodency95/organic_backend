@@ -13,7 +13,7 @@ const buttonSchema = new Schema(
 const exhibitorListHeroSchema = new Schema(
   {
     tagline: { type: String, default: "TRUSTED BY" },
-    mainCount: { type: String, default: "150+ " },
+    mainCount: { type: String, default: "100+ " },
     countHighlight: { type: String, default: "Leading" },
     titleSub: { type: String, default: "Health & Wellness Brands" },
     description: {

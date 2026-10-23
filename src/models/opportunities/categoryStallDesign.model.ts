@@ -75,7 +75,7 @@ const categoryStallDesignSchema = new Schema(
         type: [String],
         default: [
           "Position your studio as the official booth design & fabrication partner",
-          "Gain direct contracts from 200+ exhibitors for customized stall construction",
+          "Gain direct contracts from 100+ exhibitors for customized stall construction",
           "Showcase innovative eco-friendly booth designs to top organic brands",
           "Build long-term contracts & annual trade show partnerships",
           "Increase brand visibility & recall across all event platforms",

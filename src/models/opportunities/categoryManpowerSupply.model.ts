@@ -75,7 +75,7 @@ const categoryManpowerSupplySchema = new Schema(
         type: [String],
         default: [
           "Position your agency as the official manpower partner for India's organic expo",
-          "Gain direct contracts from 200+ exhibitors needing hostesses & event staff",
+          "Gain direct contracts from 100+ exhibitors needing hostesses & event staff",
           "Build long-term corporate & event management relationships",
           "Demonstrate professional staffing & security capabilities to industry leaders",
           "Increase brand visibility & recall across all event platforms",

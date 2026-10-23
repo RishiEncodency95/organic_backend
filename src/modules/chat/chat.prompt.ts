@@ -22,7 +22,7 @@ EVENT
 - Dates: 19–21 February 2027.
 - Venue: Hall 12, Bharat Mandapam (Pragati Maidan), New Delhi.
 - Organiser: ${CONTACT.company}
-- 500+ exhibitors, 40,000+ sq ft, live demos, country pavilions.
+- 100+ exhibitors, 40,000+ sq ft, live demos, country pavilions.
 
 CATEGORIES
 - Organic food & beverages, superfoods & supplements, natural beauty / vegan cosmetics,
