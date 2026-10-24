@@ -1,6 +1,7 @@
 import { Router } from "express";
 import uploadRouter from "../modules/upload/upload.routes";
 import filesRouter from "../modules/files/files.routes";
+import downloadRouter from "../modules/download/download.routes";
 import authRouter from "../modules/auth/auth.routes";
 import staffRouter from "../modules/staff/staff.routes";
 import rolesRouter from "../modules/roles/roles.routes";
@@ -85,6 +86,7 @@ router.use("/admin/careers", careersRouter);
 router.use("/msme", msmeRouter);
 router.use("/uploads", uploadRouter);
 router.use("/files", filesRouter);
+router.use("/downloads", downloadRouter);
 router.use("/settings", settingsRouter);
 router.use("/auth", authRouter);
 router.use("/users/admin", staffRouter);

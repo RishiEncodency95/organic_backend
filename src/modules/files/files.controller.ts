@@ -11,7 +11,7 @@ import { ApiError } from "../../utils/ApiError";
  * Anything else (other hosts, other accounts, non-PDFs) is rejected, so this can't be
  * used to fetch arbitrary URLs.
  */
-function parseOwnCloudinaryPdf(rawUrl: string) {
+export function parseOwnCloudinaryPdf(rawUrl: string) {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -68,7 +68,18 @@ export async function downloadFileBuffer(rawUrl: string): Promise<Buffer | null>
  * file is fetched through it here and passed through.
  */
 export const streamPdf = asyncHandler(async (req: Request, res: Response) => {
-  const asset = parseOwnCloudinaryPdf(String(req.query.url || ""));
+  await sendCloudinaryPdf(res, String(req.query.url || ""), {
+    download: req.query.download === "1",
+    name: String(req.query.name || ""),
+  });
+});
+
+/**
+ * Sends an own-account Cloudinary PDF to the browser: `download` saves it instead of
+ * opening it, `name` gives it a readable file name. Also used by /downloads/:id/file.
+ */
+export async function sendCloudinaryPdf(res: Response, rawUrl: string, opts: { download?: boolean; name?: string } = {}) {
+  const asset = parseOwnCloudinaryPdf(rawUrl);
   if (!asset) {
     throw ApiError.badRequest("A Cloudinary PDF URL from this site's account is required.");
   }
@@ -84,14 +95,13 @@ export const streamPdf = asyncHandler(async (req: Request, res: Response) => {
     throw ApiError.notFound("PDF not found.");
   }
 
-  // ?download=1 saves the file instead of opening it; ?name= gives it a readable file name
-  const wanted = String(req.query.name || "")
+  const wanted = String(opts.name || "")
     .replace(/\.pdf$/i, "")
     .replace(/[^\w .()&-]+/g, "")
     .trim()
     .slice(0, 100);
   const fileName = wanted ? `${wanted}.pdf` : asset.fileName.replace(/"/g, "");
-  const disposition = req.query.download === "1" ? "attachment" : "inline";
+  const disposition = opts.download ? "attachment" : "inline";
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `${disposition}; filename="${fileName}"`);
   res.setHeader("Cache-Control", "public, max-age=86400");
@@ -99,4 +109,4 @@ export const streamPdf = asyncHandler(async (req: Request, res: Response) => {
   if (length) res.setHeader("Content-Length", length);
 
   Readable.fromWeb(upstream.body as any).pipe(res);
-});
+}

@@ -7,3 +7,6 @@ logs/
 # Candidate CVs uploaded through the careers flow — personal data, never commit.
 # Other public/uploads/* folders hold CMS assets and stay tracked.
 public/uploads/cvs/
+
+# Download PDFs over 10 MB (Cloudinary Free plan limit) are stored here — see download.storage.ts
+storage/
