@@ -5,6 +5,7 @@ import Job from "../../models/careers/Job.model";
 import CvAnalysis from "../../models/careers/CvAnalysis.model";
 import Counter from "../../models/careers/Counter.model";
 import ApplicationEvent from "../../models/careers/ApplicationEvent.model";
+import { HR_STATUSES } from "./applicationsBoard.controller";
 import { buildSubmissionEmailData, sendCandidateSubmittedEmail, sendHrNewApplicationEmail } from "../../services/careerSubmissionMail.service";
 
 /**
@@ -316,6 +317,124 @@ export const submitApplication = async (req: Request, res: Response): Promise<vo
     res.status(500).json({
       success: false,
       message: "Submission failed. Please try again.",
+      error: (error as Error).message,
+    });
+  }
+};
+
+// INTEGRATION CONTROLLERS (server-to-server, e.g. HR-CRM pulling applied candidates)
+
+/**
+ * GET /api/careers/integrations/applications — API-key gated (see requireIntegrationApiKey).
+ * Mirrors the shape/intent of GET /api/careers/jobs, but for the pull direction HR-CRM uses
+ * to bring applied candidates + resumes into its own pipeline. Only applications that have
+ * actually been SUBMITTED (or moved further along) are returned — drafts/in-progress forms
+ * aren't real applicants yet. Supports `?since=<ISO date>` so a caller can pull only what
+ * changed since its last sync instead of the full list every time.
+ */
+export const listIntegrationApplications = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { since } = req.query;
+    const filter: any = { status: { $ne: "DRAFT" }, submittedAt: { $exists: true, $ne: null } };
+    if (since && !isNaN(Date.parse(String(since)))) {
+      filter.updatedAt = { $gte: new Date(String(since)) };
+    }
+
+    const applications = await Application.find(filter)
+      .populate("candidateId")
+      .populate("jobId", "_id title")
+      .populate("cvAnalysisId", "matchScore")
+      .sort({ submittedAt: -1 })
+      .lean();
+
+    const data = applications
+      .filter((app: any) => app.candidateId && app.jobId)
+      .map((app: any) => {
+        const candidate = app.candidateId;
+        const job = app.jobId;
+        return {
+          _id: String(app._id),
+          applicationId: app.applicationId,
+          jobId: String(job._id),
+          jobTitle: job.title,
+          status: app.status,
+          submittedAt: app.submittedAt,
+          matchScore: app.cvAnalysisId?.matchScore ?? app.scoreSnapshot?.matchScore,
+          candidate: {
+            name: candidate.name || "",
+            email: candidate.email || "",
+            phone: candidate.phone || candidate.verifiedPhone || "",
+            location: candidate.location || "",
+            photo: candidate.photo || "",
+            resumeUrl: candidate.cv?.cloudinaryUrl || "",
+            resumeFileName: candidate.cv?.originalFileName || "",
+            skills: candidate.skills || [],
+            education: candidate.education || [],
+            experience: candidate.experience || [],
+            currentCompany: candidate.currentCompany || "",
+            currentDesignation: candidate.currentDesignation || "",
+            totalExperience: candidate.totalExperience || "",
+            noticePeriod: candidate.noticePeriod || "",
+            currentCTC: candidate.currentCTC || "",
+            expectedCTC: candidate.expectedCTC || "",
+            linkedin: candidate.linkedin || "",
+          },
+        };
+      });
+
+    res.status(200).json({ success: true, count: data.length, data });
+  } catch (error) {
+    console.error("List integration applications error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch applications.",
+      error: (error as Error).message,
+    });
+  }
+};
+
+/**
+ * PATCH /api/careers/integrations/applications/:id/status — API-key gated.
+ * Mirrors updateAdminApplicationHr, but for HR-CRM pushing a recruitment-stage change it made
+ * on its own Candidate record back here (see syncCareerSiteApplicants / pushCandidateStatusToCareerSite
+ * in crewcam-backend), so hrStatus stays in sync in both directions without a human re-entering it
+ * on both sides. Only ever touches `hrStatus` — never `status`, which tracks the candidate's own
+ * self-service progress through the public apply form and must stay HR-CRM-untouched.
+ */
+export const updateIntegrationApplicationStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { hrStatus } = req.body || {};
+    if (!HR_STATUSES.includes(hrStatus)) {
+      res.status(400).json({ success: false, message: `hrStatus must be one of: ${HR_STATUSES.join(", ")}` });
+      return;
+    }
+
+    const application = await Application.findById(req.params.id);
+    if (!application) {
+      res.status(404).json({ success: false, message: "Application not found." });
+      return;
+    }
+
+    const oldHrStatus = application.hrStatus || "Not Forwarded";
+    application.hrStatus = hrStatus;
+    application.hrUpdatedAt = new Date();
+    application.hrUpdatedBy = "HR-CRM";
+    await application.save();
+
+    await ApplicationEvent.create({
+      applicationId: application.applicationId,
+      oldStatus: `HR: ${oldHrStatus}`,
+      newStatus: `HR: ${hrStatus}`,
+      changedBy: "HR-CRM",
+      note: `HR status changed to ${hrStatus} from HR-CRM`,
+    });
+
+    res.status(200).json({ success: true, message: `HR status updated to ${hrStatus}` });
+  } catch (error) {
+    console.error("Update integration application status error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update application status.",
       error: (error as Error).message,
     });
   }

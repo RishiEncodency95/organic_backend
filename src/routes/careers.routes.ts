@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getJobs, getJobBySlug, exportJobDocx, getAdminJobsList, getAdminJobById, exportAdminJobDocx, createAdminJob, updateAdminJob, deleteAdminJob, generateJobDescription } from "../modules/careers/jobs.controller";
+import { getJobs, getJobBySlug, exportJobDocx, getAdminJobsList, getAdminJobById, exportAdminJobDocx, createAdminJob, updateAdminJob, deleteAdminJob, generateJobDescription, createOrUpdateIntegrationJob } from "../modules/careers/jobs.controller";
 import {
   uploadCv,
   analyzeCv,
@@ -12,6 +12,8 @@ import {
   getApplication,
   updateApplication,
   submitApplication,
+  listIntegrationApplications,
+  updateIntegrationApplicationStatus,
   getAdminApplications,
   getAdminApplicationById,
   updateAdminApplicationStatus,
@@ -32,7 +34,7 @@ import {
 } from "../modules/careers/options.controller";
 import { uploadCvMiddleware } from "../middlewares/uploadCv.middleware";
 import { uploadPhotoMiddleware } from "../middlewares/uploadPhoto.middleware";
-import { protect } from "../middlewares/auth.middleware";
+import { protect, requireIntegrationApiKey } from "../middlewares/auth.middleware";
 import { getCareerDashboard, trackCareerEvent } from "../modules/careers/careerDashboard.controller";
 
 const router = Router();
@@ -60,6 +62,11 @@ router.post("/applications", createApplication);
 router.get("/applications/:id", getApplication);
 router.patch("/applications/:id", updateApplication);
 router.post("/applications/:id/submit", submitApplication);
+
+// INTEGRATIONS (server-to-server, e.g. HR-CRM) — API-key gated, no human JWT
+router.post("/integrations/jobs", requireIntegrationApiKey, createOrUpdateIntegrationJob);
+router.get("/integrations/applications", requireIntegrationApiKey, listIntegrationApplications);
+router.patch("/integrations/applications/:id/status", requireIntegrationApiKey, updateIntegrationApplicationStatus);
 
 // ADMIN CAREERS APIS
 router.get("/admin/dashboard", protect, getCareerDashboard);

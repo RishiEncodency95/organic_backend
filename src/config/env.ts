@@ -53,6 +53,10 @@ const envSchema = z.object({
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+
+  // Shared secret external systems (e.g. HR-CRM) send as `x-api-key` to push a job
+  // into /api/careers/integrations/jobs. Unset = that endpoint stays disabled.
+  CAREER_INTEGRATION_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

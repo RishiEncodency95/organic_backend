@@ -48,6 +48,28 @@ export const protect = async (
   }
 };
 
+// Gate for server-to-server calls (e.g. HR-CRM pushing a job in) that have no human
+// login/JWT of their own — checked via a shared secret instead. Disabled (503) unless
+// CAREER_INTEGRATION_API_KEY is set, so the endpoint can't be left open by accident.
+export const requireIntegrationApiKey = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  if (!env.CAREER_INTEGRATION_API_KEY) {
+    res.status(503).json({ success: false, message: "Integration API key is not configured on this server" });
+    return;
+  }
+
+  const provided = req.headers["x-api-key"];
+  if (provided !== env.CAREER_INTEGRATION_API_KEY) {
+    res.status(401).json({ success: false, message: "Invalid or missing API key" });
+    return;
+  }
+
+  next();
+};
+
 // Role-based access control
 export const authorize = (...roles: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {

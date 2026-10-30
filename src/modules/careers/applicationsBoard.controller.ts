@@ -14,7 +14,7 @@ import { getEmailLogo, LOGO_CID, renderHrForwardEmail } from "../../services/tem
  *   - CV uploads that were AI-checked but never turned into an application ("CV Uploaded").
  */
 
-const HR_STATUSES = [
+export const HR_STATUSES = [
   "Not Forwarded",
   "Sent to HR",
   "Under Review",

@@ -8,6 +8,9 @@ export interface IJob extends Document {
   projectEvent?: string;
   department: string;
   jobCode?: string;
+  // The job's own _id on the external system that pushed it in (e.g. HR-CRM) —
+  // lets repeated pushes update the same record instead of duplicating it.
+  hrCrmJobId?: string;
   location: string;
   employmentType: string; // e.g. Full Time, Part Time, Contract
   workplaceType?: string; // On-site (Office), Remote, Hybrid
@@ -84,6 +87,7 @@ const JobSchema: Schema = new Schema(
     projectEvent: { type: String, trim: true },
     department: { type: String, required: true, trim: true },
     jobCode: { type: String, trim: true },
+    hrCrmJobId: { type: String, trim: true, index: true, sparse: true },
     location: { type: String, required: true, trim: true },
     employmentType: { type: String, default: "Full Time" },
     workplaceType: { type: String, default: "On-site (Office)" },

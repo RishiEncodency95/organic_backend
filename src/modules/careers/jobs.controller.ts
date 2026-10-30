@@ -381,6 +381,74 @@ export const updateAdminJob = async (req: Request, res: Response): Promise<void>
   }
 };
 
+/**
+ * Receives a job pushed in by an external system (e.g. HR-CRM, authenticated via
+ * requireIntegrationApiKey) and upserts it, matched on the sender's own job id
+ * (hrCrmJobId) so re-sending the same job updates it instead of duplicating it.
+ * The payload's field names are expected to already match this Job model's
+ * (title, department, location, experienceMin/Max, skills, responsibilities,
+ * requirements, status: DRAFT|OPEN|CLOSED, ...) — any renaming for a sender whose
+ * fields differ is that sender's job to do before calling this endpoint.
+ */
+export const createOrUpdateIntegrationJob = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const body = req.body || {};
+    const externalId = body._id != null ? String(body._id) : undefined;
+
+    if (!body.title || !body.department || !body.location) {
+      res.status(400).json({ success: false, message: "title, department and location are required" });
+      return;
+    }
+
+    const jobData: Record<string, unknown> = {
+      title: body.title,
+      designation: body.designation,
+      department: body.department,
+      location: body.location,
+      employmentType: body.employmentType,
+      workplaceType: body.workplaceType,
+      totalOpenings: body.totalOpenings,
+      experienceMin: body.experienceMin,
+      experienceMax: body.experienceMax,
+      // This model has no free-text experience field — a sender that only has
+      // experienceReq (no min/max) gets it preserved here rather than silently dropped.
+      specificExperience: body.experienceMin == null && body.experienceMax == null ? body.experienceReq : undefined,
+      educationRequirements: body.educationRequirements,
+      ctcMin: body.ctcMin,
+      ctcMax: body.ctcMax,
+      description: body.description,
+      skills: body.skills,
+      preferredSkills: body.preferredSkills,
+      responsibilities: body.responsibilities,
+      requirements: body.requirements,
+      preferredQualifications: body.preferredQualifications,
+      jobCode: body.jobCode,
+      applicationClosingDate: body.applicationClosingDate ? new Date(body.applicationClosingDate) : undefined,
+      featuredJob: body.featuredJob,
+      status: ["DRAFT", "OPEN", "CLOSED"].includes(body.status) ? body.status : undefined,
+      hrCrmJobId: externalId,
+    };
+    for (const key of Object.keys(jobData)) {
+      if (jobData[key] === undefined) delete jobData[key];
+    }
+
+    const existing = externalId ? await Job.findOne({ hrCrmJobId: externalId }) : null;
+
+    if (existing) {
+      Object.assign(existing, jobData);
+      await existing.save();
+      res.status(200).json({ success: true, data: { _id: existing._id } });
+      return;
+    }
+
+    const baseSlug = (jobData.title as string).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
+    const created = await Job.create({ ...jobData, slug: await uniqueSlug(baseSlug) });
+    res.status(201).json({ success: true, data: { _id: created._id } });
+  } catch (error) {
+    res.status(400).json({ success: false, message: describeError(error), error: describeError(error) });
+  }
+};
+
 export const deleteAdminJob = async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
