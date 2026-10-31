@@ -15,7 +15,10 @@
     "seed:credentials": "tsx scripts/seed_credentials.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:dropdowns": "tsx scripts/test_dropdowns_api.ts",
-    "careers:send-emails": "tsx scripts/send_career_emails.ts"
+    "careers:send-emails": "tsx scripts/send_career_emails.ts",
+    "worker:analyzer": "tsx src/modules/competitor-analyzer/worker.ts",
+    "worker:analyzer:production": "node dist/src/modules/competitor-analyzer/worker.js",
+    "test:analyzer": "vitest run tests/competitor-analyzer"
   },
   "repository": {
     "type": "git",
@@ -54,6 +57,7 @@
     "openai": "^6.49.0",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.15.2",
+    "playwright-core": "^1.64.1",
     "pngjs": "^5.0.0",
     "qrcode": "^1.5.4",
     "speakeasy": "^2.0.0",
@@ -78,6 +82,7 @@
     "@types/qrcode": "^1.5.6",
     "@types/speakeasy": "^2.0.10",
     "@types/swagger-ui-express": "^4.1.8",
+    "mongodb-memory-server": "^11.3.0",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
     "tsx": "^4.23.13",
