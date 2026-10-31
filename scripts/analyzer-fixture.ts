@@ -1,0 +1,29 @@
+/** Offline evidence fixture for scoring, PDF and visual parity checks. Never used by application routes. */
+import { deterministicComparison } from '../src/modules/competitor-analyzer/analyzer-intelligence';
+import type { SiteEvidence } from '../src/modules/competitor-analyzer/analyzer-evidence';
+import { siteMetrics, digestPage } from '../src/modules/website-intelligence/competitor-ai';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { inspectJourneys } from '../src/modules/competitor-analyzer/journey-intelligence';
+import { BUSINESS_PROFILES, evaluateProfile } from '../src/modules/competitor-analyzer/profiles';
+export const fixtureTime='2026-10-31T06:00:00.000Z';
+const feature={state:'present' as const,evidence:[{url:'https://own.example/',snippet:'Contact us',method:'static' as const}]};
+export const fixtureSites:SiteEvidence[]=['own.example','rival.example'].map((domain,i)=>{
+  const url=`https://${domain}/`;
+  const html=`<html lang="en"><head><title>Fixture Trade Expo ${i+1}</title><meta name="description" content="An offline trade exhibition fixture for test verification."><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><h1>Fixture Trade Expo ${i+1}</h1><p>${'Organic trade exhibition and business connections. '.repeat(60)}</p><a href="/exhibitor-registration">Book exhibitor stand</a><a href="/visitor-registration">Visitor registration</a><a href="/contact">Contact us</a></body></html>`;
+  const digest=digestPage(html,new URL(url));
+  return {url,domain,role:i===0?'own':'competitor',reachable:true,error:null,name:`Fixture Expo ${i+1}`,title:digest.title,description:digest.description,image:null,https:true,
+    pages:[{url,title:digest.title,description:digest.description,words:300,headings:1,ctas:['Book exhibitor stand','Visitor registration','Contact us'],kind:'home',method:'static'}],
+    metrics:{...siteMetrics({domain,pages:[digest]}),robotsTxt:true,sitemapUrls:8},features:{blog:feature,contactForm:feature,phone:feature,email:feature,whatsapp:feature,portfolio:feature,clients:feature,testimonials:feature},
+    coverage:{discovered:8,selected:8,read:8,rendered:0,failed:0,score:100,status:'complete',pageTypes:['home','contact','events'],warnings:[]},
+    speed:{performance:80-i*10,seo:90,accessibility:88,bestPractices:95,lcpMs:1800+i*300,cls:0.05,tbtMs:100},speedError:null,brand:null,
+    socials:{profiles:[{platform:'linkedin',url:`https://www.linkedin.com/company/fixture-${i}/`,handle:`fixture-${i}`}],youtube:null,instagram:null,checkedAt:fixtureTime},
+  };
+});
+export const fixtureAnalysis={...deterministicComparison(fixtureSites),overview:'Offline test comparison of observed exhibition pages.',sites:fixtureSites.map(s=>({domain:s.domain,summary:'Offline fixture profile.',audience:'Trade visitors',positioning:'Business exhibition',offerings:['Exhibitor registration'],strengths:[{point:'Registration entry point',evidence:'Book exhibitor stand',url:s.url}],weaknesses:[]})),headToHead:[{competitor:'rival.example',theyLead:[],youLead:[{point:'Measured mobile speed',url:'https://own.example/'}],verdict:'Compare the measured page evidence.'}],gaps:[],opportunities:['Review the registration journey.'],actions:[{priority:'high',action:'Review registration instructions',reason:'Check the observed registration entry point.',effort:'low',evidenceUrls:['https://own.example/']}],swot:{strengths:['Clear registration entry point'],weaknesses:[],opportunities:['Review instructions'],threats:[]},topics:[{topic:'Exhibitor registration',sites:['own.example','rival.example']}],contentIdeas:[{title:'Exhibitor registration guide',format:'guide',why:'Help visitors understand the next step.',inspiredBy:null}]};
+export const fixtureStudy={id:'00000000-0000-4000-8000-000000000001',name:'Offline parity fixture',clientId:null,sites:fixtureSites.map(s=>({url:s.url,domain:s.domain,role:s.role,name:s.name})),createdAt:fixtureTime,updatedAt:fixtureTime,latestRun:null,settings:{schedule:'off',alerts:false,reportMonthly:false,reportEmails:[]},actions:{},report:{id:'00000000-0000-4000-8000-000000000002',status:'completed',stage:null,startedAt:fixtureTime,finishedAt:fixtureTime,errorMessage:null,sites:fixtureSites,ai:{status:'completed',generatedAt:fixtureTime,dropped:0,result:fixtureAnalysis},changes:null,costUsd:null},history:[]};
+export const fixtureShared={share:{preparedBy:'Offline test organisation',expiresAt:'2026-12-31T00:00:00.000Z',lang:'en'},study:fixtureStudy};
+export const registrationHtml='<html><head><title>Exhibitor registration</title></head><body><h1>Exhibitor registration</h1><form action="/register" method="post"><label for="name">Your name</label><input id="name" required><label for="email">Email</label><input id="email" type="email" required><input type="hidden" name="csrf"><input name="company"><button>Register</button></form><a href="/privacy">Privacy policy</a></body></html>';
+export const enhancedSites=fixtureSites.map(site=>({...site,pages:[...site.pages,{url:`${site.url}exhibitor-registration`,title:'Exhibitor registration',description:'Offline registration form',words:25,headings:1,ctas:['Register']}],journeys:inspectJourneys([{url:`${site.url}exhibitor-registration`,html:registrationHtml}],BUSINESS_PROFILES.find(p=>p.id==='expo-v1')!.journeys!)}));
+export const enhancedShared={...fixtureShared,study:{...fixtureStudy,report:{...fixtureStudy.report,sites:enhancedSites,profileResults:evaluateProfile('expo-v1',enhancedSites)}}};
+if(process.argv.includes('--write')){const dir=resolve('tests/competitor-analyzer/fixtures');mkdirSync(dir,{recursive:true});writeFileSync(resolve(dir,'shared-report.json'),JSON.stringify(fixtureShared,null,2));writeFileSync(resolve(dir,'enhanced-shared-report.json'),JSON.stringify(enhancedShared,null,2));}

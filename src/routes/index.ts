@@ -1,3 +1,4 @@
+import analyzerRouter, { publicReportsRouter } from '../modules/competitor-analyzer/routes';
 import { Router } from "express";
 import uploadRouter from "../modules/upload/upload.routes";
 import filesRouter from "../modules/files/files.routes";
@@ -139,6 +140,9 @@ router.use("/", exhibitorPublicRouter);
 router.use("/exhibitor-registrations", exhibitorAdminRouter);
 router.use("/verify", verifyRouter);
 router.use("/website/verify", verifyRouter);
+
+router.use('/competitor-analyzer', analyzerRouter);
+router.use('/public/competitor-reports', publicReportsRouter);
 
 export default router;
 

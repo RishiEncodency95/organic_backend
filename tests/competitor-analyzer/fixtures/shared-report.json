@@ -1,0 +1,531 @@
+{
+  "share": {
+    "preparedBy": "Offline test organisation",
+    "expiresAt": "2026-12-31T00:00:00.000Z",
+    "lang": "en"
+  },
+  "study": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "name": "Offline parity fixture",
+    "clientId": null,
+    "sites": [
+      {
+        "url": "https://own.example/",
+        "domain": "own.example",
+        "role": "own",
+        "name": "Fixture Expo 1"
+      },
+      {
+        "url": "https://rival.example/",
+        "domain": "rival.example",
+        "role": "competitor",
+        "name": "Fixture Expo 2"
+      }
+    ],
+    "createdAt": "2026-10-31T06:00:00.000Z",
+    "updatedAt": "2026-10-31T06:00:00.000Z",
+    "latestRun": null,
+    "settings": {
+      "schedule": "off",
+      "alerts": false,
+      "reportMonthly": false,
+      "reportEmails": []
+    },
+    "actions": {},
+    "report": {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "status": "completed",
+      "stage": null,
+      "startedAt": "2026-10-31T06:00:00.000Z",
+      "finishedAt": "2026-10-31T06:00:00.000Z",
+      "errorMessage": null,
+      "sites": [
+        {
+          "url": "https://own.example/",
+          "domain": "own.example",
+          "role": "own",
+          "reachable": true,
+          "error": null,
+          "name": "Fixture Expo 1",
+          "title": "Fixture Trade Expo 1",
+          "description": "An offline trade exhibition fixture for test verification.",
+          "image": null,
+          "https": true,
+          "pages": [
+            {
+              "url": "https://own.example/",
+              "title": "Fixture Trade Expo 1",
+              "description": "An offline trade exhibition fixture for test verification.",
+              "words": 300,
+              "headings": 1,
+              "ctas": [
+                "Book exhibitor stand",
+                "Visitor registration",
+                "Contact us"
+              ],
+              "kind": "home",
+              "method": "static"
+            }
+          ],
+          "metrics": {
+            "pages": 1,
+            "words": 371,
+            "headings": 1,
+            "ctas": 2,
+            "images": 0,
+            "contact": {
+              "phone": false,
+              "email": false,
+              "whatsapp": false,
+              "form": false
+            },
+            "social": [],
+            "schemaTypes": [],
+            "image": null,
+            "robotsTxt": true,
+            "sitemapUrls": 8
+          },
+          "features": {
+            "blog": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "contactForm": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "phone": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "email": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "whatsapp": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "portfolio": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "clients": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "testimonials": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            }
+          },
+          "coverage": {
+            "discovered": 8,
+            "selected": 8,
+            "read": 8,
+            "rendered": 0,
+            "failed": 0,
+            "score": 100,
+            "status": "complete",
+            "pageTypes": [
+              "home",
+              "contact",
+              "events"
+            ],
+            "warnings": []
+          },
+          "speed": {
+            "performance": 80,
+            "seo": 90,
+            "accessibility": 88,
+            "bestPractices": 95,
+            "lcpMs": 1800,
+            "cls": 0.05,
+            "tbtMs": 100
+          },
+          "speedError": null,
+          "brand": null,
+          "socials": {
+            "profiles": [
+              {
+                "platform": "linkedin",
+                "url": "https://www.linkedin.com/company/fixture-0/",
+                "handle": "fixture-0"
+              }
+            ],
+            "youtube": null,
+            "instagram": null,
+            "checkedAt": "2026-10-31T06:00:00.000Z"
+          }
+        },
+        {
+          "url": "https://rival.example/",
+          "domain": "rival.example",
+          "role": "competitor",
+          "reachable": true,
+          "error": null,
+          "name": "Fixture Expo 2",
+          "title": "Fixture Trade Expo 2",
+          "description": "An offline trade exhibition fixture for test verification.",
+          "image": null,
+          "https": true,
+          "pages": [
+            {
+              "url": "https://rival.example/",
+              "title": "Fixture Trade Expo 2",
+              "description": "An offline trade exhibition fixture for test verification.",
+              "words": 300,
+              "headings": 1,
+              "ctas": [
+                "Book exhibitor stand",
+                "Visitor registration",
+                "Contact us"
+              ],
+              "kind": "home",
+              "method": "static"
+            }
+          ],
+          "metrics": {
+            "pages": 1,
+            "words": 371,
+            "headings": 1,
+            "ctas": 2,
+            "images": 0,
+            "contact": {
+              "phone": false,
+              "email": false,
+              "whatsapp": false,
+              "form": false
+            },
+            "social": [],
+            "schemaTypes": [],
+            "image": null,
+            "robotsTxt": true,
+            "sitemapUrls": 8
+          },
+          "features": {
+            "blog": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "contactForm": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "phone": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "email": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "whatsapp": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "portfolio": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "clients": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            },
+            "testimonials": {
+              "state": "present",
+              "evidence": [
+                {
+                  "url": "https://own.example/",
+                  "snippet": "Contact us",
+                  "method": "static"
+                }
+              ]
+            }
+          },
+          "coverage": {
+            "discovered": 8,
+            "selected": 8,
+            "read": 8,
+            "rendered": 0,
+            "failed": 0,
+            "score": 100,
+            "status": "complete",
+            "pageTypes": [
+              "home",
+              "contact",
+              "events"
+            ],
+            "warnings": []
+          },
+          "speed": {
+            "performance": 70,
+            "seo": 90,
+            "accessibility": 88,
+            "bestPractices": 95,
+            "lcpMs": 2100,
+            "cls": 0.05,
+            "tbtMs": 100
+          },
+          "speedError": null,
+          "brand": null,
+          "socials": {
+            "profiles": [
+              {
+                "platform": "linkedin",
+                "url": "https://www.linkedin.com/company/fixture-1/",
+                "handle": "fixture-1"
+              }
+            ],
+            "youtube": null,
+            "instagram": null,
+            "checkedAt": "2026-10-31T06:00:00.000Z"
+          }
+        }
+      ],
+      "ai": {
+        "status": "completed",
+        "generatedAt": "2026-10-31T06:00:00.000Z",
+        "dropped": 0,
+        "result": {
+          "scores": [
+            {
+              "area": "Trust & proof",
+              "scores": {
+                "own.example": 7,
+                "rival.example": 7
+              },
+              "leader": null,
+              "note": "Calculated from measured website evidence."
+            },
+            {
+              "area": "Calls to action",
+              "scores": {
+                "own.example": 6,
+                "rival.example": 6
+              },
+              "leader": null,
+              "note": "Calculated from measured website evidence."
+            },
+            {
+              "area": "Content depth",
+              "scores": {
+                "own.example": 5,
+                "rival.example": 5
+              },
+              "leader": null,
+              "note": "Calculated from measured website evidence."
+            },
+            {
+              "area": "Ease of contact",
+              "scores": {
+                "own.example": 10,
+                "rival.example": 10
+              },
+              "leader": null,
+              "note": "Calculated from measured website evidence."
+            },
+            {
+              "area": "Speed & mobile",
+              "scores": {
+                "own.example": 8,
+                "rival.example": 8
+              },
+              "leader": null,
+              "note": "Calculated from measured website evidence."
+            }
+          ],
+          "overall": {
+            "own.example": 72,
+            "rival.example": 72
+          },
+          "overview": "Offline test comparison of observed exhibition pages.",
+          "sites": [
+            {
+              "domain": "own.example",
+              "summary": "Offline fixture profile.",
+              "audience": "Trade visitors",
+              "positioning": "Business exhibition",
+              "offerings": [
+                "Exhibitor registration"
+              ],
+              "strengths": [
+                {
+                  "point": "Registration entry point",
+                  "evidence": "Book exhibitor stand",
+                  "url": "https://own.example/"
+                }
+              ],
+              "weaknesses": []
+            },
+            {
+              "domain": "rival.example",
+              "summary": "Offline fixture profile.",
+              "audience": "Trade visitors",
+              "positioning": "Business exhibition",
+              "offerings": [
+                "Exhibitor registration"
+              ],
+              "strengths": [
+                {
+                  "point": "Registration entry point",
+                  "evidence": "Book exhibitor stand",
+                  "url": "https://rival.example/"
+                }
+              ],
+              "weaknesses": []
+            }
+          ],
+          "headToHead": [
+            {
+              "competitor": "rival.example",
+              "theyLead": [],
+              "youLead": [
+                {
+                  "point": "Measured mobile speed",
+                  "url": "https://own.example/"
+                }
+              ],
+              "verdict": "Compare the measured page evidence."
+            }
+          ],
+          "gaps": [],
+          "opportunities": [
+            "Review the registration journey."
+          ],
+          "actions": [
+            {
+              "priority": "high",
+              "action": "Review registration instructions",
+              "reason": "Check the observed registration entry point.",
+              "effort": "low",
+              "evidenceUrls": [
+                "https://own.example/"
+              ]
+            }
+          ],
+          "swot": {
+            "strengths": [
+              "Clear registration entry point"
+            ],
+            "weaknesses": [],
+            "opportunities": [
+              "Review instructions"
+            ],
+            "threats": []
+          },
+          "topics": [
+            {
+              "topic": "Exhibitor registration",
+              "sites": [
+                "own.example",
+                "rival.example"
+              ]
+            }
+          ],
+          "contentIdeas": [
+            {
+              "title": "Exhibitor registration guide",
+              "format": "guide",
+              "why": "Help visitors understand the next step.",
+              "inspiredBy": null
+            }
+          ]
+        }
+      },
+      "changes": null,
+      "costUsd": null
+    },
+    "history": []
+  }
+}

@@ -10,3 +10,9 @@ public/uploads/cvs/
 
 # Download PDFs over 10 MB (Cloudinary Free plan limit) are stored here — see download.storage.ts
 storage/
+
+# Local analyzer verification caches
+.npm-cache/
+.test-mongodb/
+dependency-audit.json
+.pdf-qa/
