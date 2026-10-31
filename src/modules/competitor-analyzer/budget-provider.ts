@@ -26,6 +26,7 @@ export async function callProvider(provider: ProviderId, request: ProviderReques
     });
     if(!reserved.modifiedCount)return failure;
     dispatched++;
+    return undefined;
   }});
   if(result.ok&&dispatched&&result.usage.inputTokens!=null&&result.usage.outputTokens!=null){
     // Release unused allowance for the successful attempt only. Retain every failed attempt.
