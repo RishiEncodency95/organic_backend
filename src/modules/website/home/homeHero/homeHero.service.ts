@@ -1,6 +1,45 @@
 import HomeHero from "../../../../models/home/homeHero.model";
 import { ApiError } from "../../../../utils/ApiError";
 
+const parseDateTime = (dateStr?: string, timeStr?: string, isEnd = false): number | null => {
+  if (!dateStr || typeof dateStr !== "string" || !dateStr.trim()) return null;
+  const parts = dateStr.trim().split("-");
+  if (parts.length !== 3) return null;
+
+  let year: number;
+  let month: number;
+  let day: number;
+
+  if (parts[0].length === 4) {
+    year = Number(parts[0]);
+    month = Number(parts[1]) - 1;
+    day = Number(parts[2]);
+  } else if (parts[2].length === 4) {
+    day = Number(parts[0]);
+    month = Number(parts[1]) - 1;
+    year = Number(parts[2]);
+  } else {
+    return null;
+  }
+
+  let hours = isEnd ? 23 : 0;
+  let minutes = isEnd ? 59 : 0;
+  let seconds = isEnd ? 59 : 0;
+  let ms = isEnd ? 999 : 0;
+
+  if (timeStr && typeof timeStr === "string" && timeStr.trim()) {
+    const timeParts = timeStr.trim().split(":");
+    if (timeParts.length >= 2) {
+      hours = Number(timeParts[0]) || 0;
+      minutes = Number(timeParts[1]) || 0;
+      seconds = 0;
+      ms = 0;
+    }
+  }
+
+  return new Date(year, month, day, hours, minutes, seconds, ms).getTime();
+};
+
 export const isSlideActive = (slide: any): boolean => {
   // If schedule is not enabled, the slide is always active
   if (!slide.isScheduled) {
@@ -9,68 +48,14 @@ export const isSlideActive = (slide: any): boolean => {
 
   const now = Date.now();
 
-  // 1. Check Start Date & Time
-  if (slide.startDate && typeof slide.startDate === "string" && slide.startDate.trim()) {
-    const sDate = slide.startDate.trim();
-    const parts = sDate.split("-");
-    if (parts.length === 3) {
-      let hours = 0;
-      let minutes = 0;
-      if (slide.startTime && typeof slide.startTime === "string" && slide.startTime.trim()) {
-        const timeParts = slide.startTime.trim().split(":");
-        if (timeParts.length >= 2) {
-          hours = Number(timeParts[0]) || 0;
-          minutes = Number(timeParts[1]) || 0;
-        }
-      }
-      const startTimeMs = new Date(
-        Number(parts[0]),
-        Number(parts[1]) - 1,
-        Number(parts[2]),
-        hours,
-        minutes,
-        0,
-        0
-      ).getTime();
-
-      if (now < startTimeMs) {
-        return false; // not started yet
-      }
-    }
+  const startMs = parseDateTime(slide.startDate, slide.startTime, false);
+  if (startMs !== null && now < startMs) {
+    return false; // not started yet
   }
 
-  // 2. Check End Date & Time
-  const endDateStr = (slide.endDate || "").trim();
-  if (endDateStr) {
-    const parts = endDateStr.split("-");
-    if (parts.length === 3) {
-      let hours = 23;
-      let minutes = 59;
-      let seconds = 59;
-      let ms = 999;
-      if (slide.endTime && typeof slide.endTime === "string" && slide.endTime.trim()) {
-        const timeParts = slide.endTime.trim().split(":");
-        if (timeParts.length >= 2) {
-          hours = Number(timeParts[0]) || 0;
-          minutes = Number(timeParts[1]) || 0;
-          seconds = 0;
-          ms = 0;
-        }
-      }
-      const endTimeMs = new Date(
-        Number(parts[0]),
-        Number(parts[1]) - 1,
-        Number(parts[2]),
-        hours,
-        minutes,
-        seconds,
-        ms
-      ).getTime();
-
-      if (now > endTimeMs) {
-        return false; // expired
-      }
-    }
+  const endMs = parseDateTime(slide.endDate, slide.endTime, true);
+  if (endMs !== null && now > endMs) {
+    return false; // expired
   }
 
   return true;
