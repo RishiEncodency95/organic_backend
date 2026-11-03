@@ -10,6 +10,11 @@ export interface IHomeHero extends Document {
   titleSecondary?: string;
   subtitle?: string;
   description?: string;
+  isScheduled?: boolean;
+  startDate?: string;
+  startTime?: string;
+  endDate?: string;
+  endTime?: string;
   date?: string;
   location?: string;
   status?: string;
@@ -34,6 +39,11 @@ const homeHeroSchema = new Schema(
     titleSecondary: { type: String, default: "" },
     subtitle: { type: String, default: "" },
     description: { type: String, default: "" },
+    isScheduled: { type: Boolean, default: false },
+    startDate: { type: String, default: "" },
+    startTime: { type: String, default: "" },
+    endDate: { type: String, default: "" },
+    endTime: { type: String, default: "" },
     date: { type: String, default: "" },
     location: { type: String, default: "" },
     status: { type: String, default: "active" },

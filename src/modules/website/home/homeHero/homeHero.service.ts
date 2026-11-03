@@ -1,6 +1,81 @@
 import HomeHero from "../../../../models/home/homeHero.model";
 import { ApiError } from "../../../../utils/ApiError";
 
+export const isSlideActive = (slide: any): boolean => {
+  // If schedule is not enabled, the slide is always active
+  if (!slide.isScheduled) {
+    return true;
+  }
+
+  const now = Date.now();
+
+  // 1. Check Start Date & Time
+  if (slide.startDate && typeof slide.startDate === "string" && slide.startDate.trim()) {
+    const sDate = slide.startDate.trim();
+    const parts = sDate.split("-");
+    if (parts.length === 3) {
+      let hours = 0;
+      let minutes = 0;
+      if (slide.startTime && typeof slide.startTime === "string" && slide.startTime.trim()) {
+        const timeParts = slide.startTime.trim().split(":");
+        if (timeParts.length >= 2) {
+          hours = Number(timeParts[0]) || 0;
+          minutes = Number(timeParts[1]) || 0;
+        }
+      }
+      const startTimeMs = new Date(
+        Number(parts[0]),
+        Number(parts[1]) - 1,
+        Number(parts[2]),
+        hours,
+        minutes,
+        0,
+        0
+      ).getTime();
+
+      if (now < startTimeMs) {
+        return false; // not started yet
+      }
+    }
+  }
+
+  // 2. Check End Date & Time
+  const endDateStr = (slide.endDate || "").trim();
+  if (endDateStr) {
+    const parts = endDateStr.split("-");
+    if (parts.length === 3) {
+      let hours = 23;
+      let minutes = 59;
+      let seconds = 59;
+      let ms = 999;
+      if (slide.endTime && typeof slide.endTime === "string" && slide.endTime.trim()) {
+        const timeParts = slide.endTime.trim().split(":");
+        if (timeParts.length >= 2) {
+          hours = Number(timeParts[0]) || 0;
+          minutes = Number(timeParts[1]) || 0;
+          seconds = 0;
+          ms = 0;
+        }
+      }
+      const endTimeMs = new Date(
+        Number(parts[0]),
+        Number(parts[1]) - 1,
+        Number(parts[2]),
+        hours,
+        minutes,
+        seconds,
+        ms
+      ).getTime();
+
+      if (now > endTimeMs) {
+        return false; // expired
+      }
+    }
+  }
+
+  return true;
+};
+
 export const createHomeHeroService = async (payload: any, file?: Express.Multer.File) => {
   const updateData = { ...payload };
   if (file) {
@@ -9,8 +84,12 @@ export const createHomeHeroService = async (payload: any, file?: Express.Multer.
   return await HomeHero.create(updateData);
 };
 
-export const getAllHomeHeroService = async () => {
-  return await HomeHero.find().sort({ createdAt: 1 });
+export const getAllHomeHeroService = async (options?: { all?: boolean }) => {
+  const slides = await HomeHero.find().sort({ createdAt: 1 });
+  if (options?.all) {
+    return slides;
+  }
+  return slides.filter(isSlideActive);
 };
 
 export const getHomeHeroByIdService = async (id: string) => {
@@ -55,6 +134,11 @@ export const syncHomeHeroSlidesService = async (slidesPayload: any) => {
     subtitle: s.subtitle || "",
     title: s.title || `${s.titlePrimary || ""} ${s.titleSecondary || ""}`.trim(),
     description: s.description || "",
+    isScheduled: Boolean(s.isScheduled),
+    startDate: s.startDate || "",
+    startTime: s.startTime || "",
+    endDate: s.endDate || "",
+    endTime: s.endTime || "",
     date: s.date || "",
     location: s.location || "",
     img: s.image || s.img || "",
