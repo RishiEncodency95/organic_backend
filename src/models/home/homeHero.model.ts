@@ -11,6 +11,7 @@ export interface IHomeHero extends Document {
   subtitle?: string;
   description?: string;
   isScheduled?: boolean;
+  showContent?: boolean;
   startDate?: string;
   startTime?: string;
   endDate?: string;
@@ -40,6 +41,8 @@ const homeHeroSchema = new Schema(
     subtitle: { type: String, default: "" },
     description: { type: String, default: "" },
     isScheduled: { type: Boolean, default: false },
+    // Left-side text + buttons over the banner. Off for banners that carry their own artwork text.
+    showContent: { type: Boolean, default: true },
     startDate: { type: String, default: "" },
     startTime: { type: String, default: "" },
     endDate: { type: String, default: "" },

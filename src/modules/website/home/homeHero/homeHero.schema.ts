@@ -9,6 +9,7 @@ export const homeHeroSchema = z.object({
     subtitle: z.string().optional(),
     description: z.string().optional(),
     isScheduled: z.boolean().optional(),
+    showContent: z.boolean().optional(),
     startDate: z.string().optional(),
     startTime: z.string().optional(),
     endDate: z.string().optional(),
