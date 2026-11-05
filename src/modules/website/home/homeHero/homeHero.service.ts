@@ -1,65 +1,10 @@
 import HomeHero from "../../../../models/home/homeHero.model";
 import { ApiError } from "../../../../utils/ApiError";
+import mongoose from "mongoose";
+import { isSlideActive, validateSlideSchedule } from "./homeHero.schedule";
 
-const parseDateTime = (dateStr?: string, timeStr?: string, isEnd = false): number | null => {
-  if (!dateStr || typeof dateStr !== "string" || !dateStr.trim()) return null;
-  const parts = dateStr.trim().split("-");
-  if (parts.length !== 3) return null;
-
-  let year: number;
-  let month: number;
-  let day: number;
-
-  if (parts[0].length === 4) {
-    year = Number(parts[0]);
-    month = Number(parts[1]) - 1;
-    day = Number(parts[2]);
-  } else if (parts[2].length === 4) {
-    day = Number(parts[0]);
-    month = Number(parts[1]) - 1;
-    year = Number(parts[2]);
-  } else {
-    return null;
-  }
-
-  let hours = isEnd ? 23 : 0;
-  let minutes = isEnd ? 59 : 0;
-  let seconds = isEnd ? 59 : 0;
-  let ms = isEnd ? 999 : 0;
-
-  if (timeStr && typeof timeStr === "string" && timeStr.trim()) {
-    const timeParts = timeStr.trim().split(":");
-    if (timeParts.length >= 2) {
-      hours = Number(timeParts[0]) || 0;
-      minutes = Number(timeParts[1]) || 0;
-      seconds = 0;
-      ms = 0;
-    }
-  }
-
-  return new Date(year, month, day, hours, minutes, seconds, ms).getTime();
-};
-
-export const isSlideActive = (slide: any): boolean => {
-  // If schedule is not enabled, the slide is always active
-  if (!slide.isScheduled) {
-    return true;
-  }
-
-  const now = Date.now();
-
-  const startMs = parseDateTime(slide.startDate, slide.startTime, false);
-  if (startMs !== null && now < startMs) {
-    return false; // not started yet
-  }
-
-  const endMs = parseDateTime(slide.endDate, slide.endTime, true);
-  if (endMs !== null && now > endMs) {
-    return false; // expired
-  }
-
-  return true;
-};
+// Schedule parsing / activity check live in homeHero.schedule.ts (IST-based, unit-tested).
+export { isSlideActive };
 
 export const createHomeHeroService = async (payload: any, file?: Express.Multer.File) => {
   const updateData = { ...payload };
@@ -70,7 +15,8 @@ export const createHomeHeroService = async (payload: any, file?: Express.Multer.
 };
 
 export const getAllHomeHeroService = async (options?: { all?: boolean }) => {
-  const slides = await HomeHero.find().sort({ createdAt: 1 });
+  // _id is the tie-breaker: slides saved in one batch can share the same createdAt millisecond.
+  const slides = await HomeHero.find().sort({ createdAt: 1, _id: 1 });
   if (options?.all) {
     return slides;
   }
@@ -107,12 +53,12 @@ export const syncHomeHeroSlidesService = async (slidesPayload: any) => {
     : [slidesPayload];
 
   if (!slides || slides.length === 0) {
-    return await HomeHero.find().sort({ createdAt: 1 });
+    return await HomeHero.find().sort({ createdAt: 1, _id: 1 });
   }
 
-  // Clear and replace with latest ordered slides
-  await HomeHero.deleteMany({});
   const cleanedSlides = slides.map((s: any) => ({
+    // Pre-generated ids ascend in slide order, so order survives the createdAt/_id sort.
+    _id: new mongoose.Types.ObjectId(),
     tagline: s.tagline || "",
     titlePrimary: s.titlePrimary || "",
     titleSecondary: s.titleSecondary || "",
@@ -120,6 +66,7 @@ export const syncHomeHeroSlidesService = async (slidesPayload: any) => {
     title: s.title || `${s.titlePrimary || ""} ${s.titleSecondary || ""}`.trim(),
     description: s.description || "",
     isScheduled: Boolean(s.isScheduled),
+    showContent: s.showContent !== false,
     startDate: s.startDate || "",
     startTime: s.startTime || "",
     endDate: s.endDate || "",
@@ -136,6 +83,31 @@ export const syncHomeHeroSlidesService = async (slidesPayload: any) => {
     status: s.status || "active",
   }));
 
-  const saved = await HomeHero.insertMany(cleanedSlides);
+  // Validate everything before touching the database.
+  cleanedSlides.forEach((slide: any, index: number) => {
+    const problem = validateSlideSchedule(slide);
+    if (problem) throw ApiError.badRequest(`Hero Slide ${index + 1}: ${problem}`);
+  });
+
+  // Replace safely: insert the new slides first, delete the old ones only afterwards.
+  // (Previously everything was deleted first, so a failed insert wiped all banners.)
+  const previous = await HomeHero.find().select("_id").lean();
+  const insertedIds = cleanedSlides.map((slide: any) => slide._id);
+
+  let saved;
+  try {
+    saved = await HomeHero.insertMany(cleanedSlides);
+  } catch (err) {
+    await HomeHero.deleteMany({ _id: { $in: insertedIds } }).catch(() => undefined);
+    throw err;
+  }
+
+  try {
+    await HomeHero.deleteMany({ _id: { $in: previous.map((doc) => doc._id) } });
+  } catch (err) {
+    await HomeHero.deleteMany({ _id: { $in: insertedIds } }).catch(() => undefined);
+    throw err;
+  }
+
   return saved;
 };
