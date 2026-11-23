@@ -24,6 +24,7 @@ const defaultFooter = {
   websiteUrl: "www.bharatorganicexpo.com",
   contactAddress: "Hall 12, Pragati Maidan, New Delhi, India 110001",
   phoneNumber: "+91 96549 00525",
+  stallBookingPhone: "+91 96549 00525",
   conferenceHelpline: "+91 98183 53841",
   contactEmail: "info@namogangewellness.com",
   facebookUrl: "https://facebook.com/bharatorganicexpo",
