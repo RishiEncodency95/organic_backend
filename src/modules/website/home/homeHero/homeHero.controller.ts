@@ -15,8 +15,9 @@ export const createHomeHero = asyncHandler(async (req: Request, res: Response) =
   res.status(201).json(new ApiResponse(201, "Home Hero banner created successfully", data));
 });
 
-export const getAllHomeHero = asyncHandler(async (_req: Request, res: Response) => {
-  const data = await getAllHomeHeroService();
+export const getAllHomeHero = asyncHandler(async (req: Request, res: Response) => {
+  const all = req.query.all === "true" || req.query.includeExpired === "true";
+  const data = await getAllHomeHeroService({ all });
   res.status(200).json(new ApiResponse(200, "Home Hero banners fetched successfully", data));
 });
 

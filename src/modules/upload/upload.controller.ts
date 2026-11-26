@@ -40,6 +40,15 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
 
   const folder = (req.query.folder as string) || "bharat-organic/content";
 
+  // Optional exact-size rule (e.g. hero banners must be 1400x526). Callers that don't send
+  // these query params are unaffected.
+  const requiredWidth = Number(req.query.requiredWidth);
+  const requiredHeight = Number(req.query.requiredHeight);
+  const hasSizeRule =
+    file.mimetype.startsWith("image/") &&
+    Number.isInteger(requiredWidth) && requiredWidth > 0 &&
+    Number.isInteger(requiredHeight) && requiredHeight > 0;
+
   // Cloudinary only — deliberately no local-disk fallback. A silent local
   // fallback here is exactly how a batch of images ended up saved to
   // public/uploads instead of Cloudinary without anyone noticing; failing
@@ -66,7 +75,7 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
       .slice(0, 60) || "document";
 
   try {
-    const result = await new Promise<{ secure_url: string; public_id: string }>((resolve, reject) => {
+    const result = await new Promise<{ secure_url: string; public_id: string; width?: number; height?: number }>((resolve, reject) => {
       const callback = (error: any, result: any) => {
         if (error || !result) {
           return reject(error || new Error("Cloudinary upload failed"));
@@ -74,6 +83,8 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
         resolve({
           secure_url: result.secure_url,
           public_id: result.public_id,
+          width: result.width,
+          height: result.height,
         });
       };
 
@@ -92,6 +103,14 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
       uploadStream.end(file.buffer);
     });
 
+    if (hasSizeRule && (result.width !== requiredWidth || result.height !== requiredHeight)) {
+      // Wrong dimensions: remove the file we just stored so it doesn't linger unused.
+      await cloudinary.uploader.destroy(result.public_id).catch(() => undefined);
+      throw ApiError.badRequest(
+        `Image is ${result.width}x${result.height}px. It must be exactly ${requiredWidth}x${requiredHeight}px.`
+      );
+    }
+
     res.status(200).json(
       new ApiResponse(200, "File uploaded to Cloudinary successfully", {
         // Relative on purpose: the website and admin both forward /api to this server.
@@ -101,6 +120,7 @@ export const uploadFile = asyncHandler(async (req: Request, res: Response) => {
     );
     return;
   } catch (cloudErr: any) {
+    if (cloudErr instanceof ApiError) throw cloudErr;
     console.error("Cloudinary upload error:", cloudErr);
     throw ApiError.badRequest(cloudErr?.message || "Failed to upload file to Cloudinary");
   }

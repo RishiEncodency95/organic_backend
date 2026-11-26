@@ -1,3 +1,4 @@
+import { ANALYZER_PERMISSIONS } from '../competitor-analyzer/permissions';
 import { Router, Request, Response } from "express";
 import { Role } from "../../models/Role.model";
 import asyncHandler from "../../utils/asyncHandler";
@@ -9,6 +10,7 @@ const router = Router();
 
 // Standard system permissions for Bharat Organic Expo
 export const SYSTEM_PERMISSIONS = [
+  ...ANALYZER_PERMISSIONS,
   { _id: "perm_exhibitors_view", module: "Exhibitors", action: "View", key: "exhibitors.view", label: "View Exhibitor Profiles & Stalls" },
   { _id: "perm_exhibitors_create", module: "Exhibitors", action: "Create", key: "exhibitors.create", label: "Register New Exhibitors" },
   { _id: "perm_exhibitors_edit", module: "Exhibitors", action: "Edit", key: "exhibitors.edit", label: "Edit Exhibitor Data & Documents" },

@@ -178,7 +178,7 @@ async function getOAuthAccessToken(): Promise<string> {
 }
 
 /** Resolve an access token: OAuth refresh-token flow first, service account fallback. */
-async function resolveAccessToken(): Promise<string> {
+export async function resolveGscAccessToken(): Promise<string> {
   if (getOAuthCreds()) return getOAuthAccessToken();
   const sa = loadServiceAccount();
   if (sa) return accessToken(sa);
@@ -204,7 +204,7 @@ export async function fetchSearchAnalytics(days = 28, dimension: "page" | "query
     process.env.SEARCH_CONSOLE_SITE_URL ||
     getSiteOrigin();
   try {
-    const token = await resolveAccessToken();
+    const token = await resolveGscAccessToken();
     const end = new Date();
     const start = new Date(Date.now() - days * 86_400_000);
     const rangeStart = start.toISOString().split("T")[0];

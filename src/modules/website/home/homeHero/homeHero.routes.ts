@@ -8,15 +8,17 @@ import {
   deleteHomeHeroById,
 } from "./homeHero.controller";
 import { createUploader } from "../../../../middlewares/upload.middleware";
+import { protect } from "../../../../middlewares/auth.middleware";
 
 const router = Router();
 const upload = createUploader("homehero");
 
-router.post("/", upload.single("img"), createHomeHero);
+// Reads stay public (the website needs them); every write requires an admin login.
+router.post("/", protect, upload.single("img"), createHomeHero);
 router.get("/", getAllHomeHero);
-router.put("/", syncHomeHero);
+router.put("/", protect, syncHomeHero);
 router.get("/:id", getHomeHeroById);
-router.put("/:id", upload.single("img"), updateHomeHeroById);
-router.delete("/:id", deleteHomeHeroById);
+router.put("/:id", protect, upload.single("img"), updateHomeHeroById);
+router.delete("/:id", protect, deleteHomeHeroById);
 
 export default router;
