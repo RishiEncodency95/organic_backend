@@ -1,3 +1,4 @@
+import Seo from "../../models/seo.model";
 import HomeHero from "../../models/home/homeHero.model";
 import IntroductionSection from "../../models/home/introductionSection.model";
 import WhyParticipate from "../../models/home/whyParticipate.model";
@@ -39,7 +40,8 @@ export async function getPage(_key?: string): Promise<any> {
   for (const [section, doc] of entries) {
     if (doc) sections[section] = doc;
   }
-  return { sections, seo: {} };
+  const homeSeo = await Seo.findOne({ page: "home" }).lean().catch(() => null);
+  return { sections, seo: homeSeo || {} };
 }
 
 export async function updateSection(section?: string, data?: any, _by?: string) {
@@ -56,7 +58,16 @@ export async function updateSection(section?: string, data?: any, _by?: string) 
   return null;
 }
 
-export async function updateSeo(_data?: any, _by?: string) { return null; }
+export async function updateSeo(data?: any, by?: string) {
+  if (!data || typeof data !== "object") return null;
+  const set: Record<string, unknown> = { ...data };
+  if (by) set.updatedBy = by;
+  return Seo.findOneAndUpdate(
+    { page: "home" },
+    { $set: set, $setOnInsert: { page: "home", isActive: true } },
+    { upsert: true, new: true }
+  ).lean();
+}
 export async function getHome2Page() { return getPage(); }
 export async function updateHome2Section(section?: string, data?: any, by?: string) { return updateSection(section, data, by); }
 export async function getHome2Raw() { return getPage(); }
