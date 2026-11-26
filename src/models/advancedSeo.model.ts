@@ -18,11 +18,21 @@ export interface ISocialLinks {
   linkedin: string;
 }
 
+export interface IAuditSchedule {
+  frequency: string;
+  intervalDays: number;
+  autoPilotEnabled: boolean;
+  lastRunAt?: Date;
+  nextRunAt?: Date;
+  webhookUrl?: string;
+}
+
 export interface IAdvancedSeo extends Document {
   headerScripts: string;
   footerScripts: string;
   seoFiles: ISeoFile[];
   socialLinks: ISocialLinks;
+  auditSchedule?: IAuditSchedule;
   ga4MeasurementId?: string;
   gtmContainerId?: string;
   googleSearchConsoleVerification?: string;
@@ -45,6 +55,14 @@ const advancedSeoSchema = new Schema<IAdvancedSeo>(
     headerScripts: { type: String, default: "" },
     footerScripts: { type: String, default: "" },
     seoFiles: { type: [seoFileSchema], default: [] },
+    auditSchedule: {
+      frequency: { type: String, default: "weekly" },
+      intervalDays: { type: Number, default: 7 },
+      autoPilotEnabled: { type: Boolean, default: false },
+      lastRunAt: { type: Date },
+      nextRunAt: { type: Date },
+      webhookUrl: { type: String, default: "" },
+    },
     ga4MeasurementId: { type: String, default: "G-PP5N4MZBL9" },
     gtmContainerId: { type: String, default: "GTM-TG73QDSZ" },
     googleSearchConsoleVerification: {
