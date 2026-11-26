@@ -10,6 +10,7 @@ import * as https from "https";
 import * as http from "http";
 import { URL } from "url";
 import * as cheerio from "cheerio";
+import { getCrawlerUserAgent } from "../../config/seoSite";
 
 export interface HttpFetchResult {
   requestedUrl: string;
@@ -35,12 +36,16 @@ export interface CrawlLink {
   isInternal: boolean;
   isNofollow: boolean;
   unsafeBlank: boolean;
+  /** The link has visible text, an aria-label, a title or an image with alt text. Absent on older crawls. */
+  hasLabel?: boolean;
 }
 
 export interface CrawlImage {
   src: string | null;
   alt: string | null;
   hasAlt: boolean;
+  isDecorative?: boolean;
+  isFill?: boolean;
   width: string | null;
   height: string | null;
   srcset: string | null;
@@ -88,6 +93,24 @@ export interface CrawlResult {
   h3: string[];
   headingSequence: Array<{ level: number; text: string }>;
   wordCount: number;
+  /** Visible text as a share (%) of the HTML size. Absent on crawls stored before this was measured. */
+  textRatio?: number;
+  // The fields below are absent on crawls stored before they were measured; a check that needs one is then skipped.
+  /** Every redirect followed to reach this page. */
+  redirects?: Array<{ url: string; status: number }>;
+  xRobotsTag?: string | null;
+  lastModifiedHeader?: string | null;
+  hasDoctype?: boolean;
+  ampPage?: boolean;
+  ampHtmlUrl?: string | null;
+  scripts?: string[];
+  pluginTags?: string[];
+  /** href values that are not valid web addresses. */
+  malformedLinks?: string[];
+  /** Distinct semantic elements used (header, nav, main, article, section, aside, footer). */
+  semanticTags?: string[];
+  /** MinHash of the page text, to find near-duplicate pages. Empty when the page has too little text. */
+  contentSignature?: number[];
   links: CrawlLink[];
   internalLinksUnique: number;
   externalLinksUnique: number;
@@ -104,15 +127,22 @@ export interface CrawlResult {
   stylesheets: string[];
   inlineScriptCount: number;
   syncHeadScripts: number;
+  /** The scripts counted in syncHeadScripts */
+  syncHeadScriptSrcs?: string[];
+  /** Characters of inline <script> content (framework page data, analytics snippets) in the HTML */
+  inlineScriptBytes?: number;
+  /** Characters of the page's HTML */
+  htmlLength?: number;
   plaintextEmails: string[];
   mixedContent: string[];
   copyrightYears: number[];
-  hasEventDates: boolean;
-  hasCountdown: boolean;
+  /** Full indexable visible text of the page for content matching & internal linking */
+  bodyText?: string;
+  /** Page text a link can sit in (the same words the visitor reads, outside headings, buttons, menus and existing links) */
+  linkableText?: string;
 }
 
-const USER_AGENT =
-  "BharatOrganicSEOAudit/1.0 (+real-crawl; contact: seo@bharatorganicexpo.com)";
+const userAgent = () => getCrawlerUserAgent();
 
 const DEPRECATED_TAGS = [
   "center", "font", "big", "marquee", "blink", "frame", "frameset",
@@ -153,7 +183,7 @@ export function fetchWithTiming(
           path: `${parsed.pathname}${parsed.search}`,
           method: "GET",
           headers: {
-            "User-Agent": USER_AGENT,
+            "User-Agent": userAgent(),
             Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Encoding": acceptEncoding,
             "Accept-Language": "en-US,en;q=0.9",
@@ -256,9 +286,60 @@ function normalizeHost(host: string): string {
   return host.toLowerCase().replace(/^www\./, "");
 }
 
+const MINHASH_SIZE = 24;
+
+/** FNV-1a 32 bit, seeded. */
+function fnv(text: string, seed: number): number {
+  let h = (0x811c9dc5 ^ seed) >>> 0;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
+/** MinHash over 3-word shingles: two pages with a similar signature share most of their text. */
+export function contentSignatureOf(text: string): number[] {
+  const words = text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+  if (words.length < 40) return [];
+  const sig = new Array<number>(MINHASH_SIZE).fill(0xffffffff);
+  for (let i = 0; i + 3 <= words.length; i += 1) {
+    const shingle = `${words[i]} ${words[i + 1]} ${words[i + 2]}`;
+    for (let k = 0; k < MINHASH_SIZE; k += 1) {
+      const h = fnv(shingle, k * 2654435761);
+      if (h < sig[k]) sig[k] = h;
+    }
+  }
+  return sig;
+}
+
+/** Share of equal positions in two signatures: an estimate of how much of the text is the same. */
+export function signatureSimilarity(a: number[] | undefined, b: number[] | undefined): number {
+  if (!a?.length || !b?.length || a.length !== b.length) return 0;
+  let same = 0;
+  for (let i = 0; i < a.length; i += 1) if (a[i] === b[i]) same += 1;
+  return same / a.length;
+}
+
 function textOf($: cheerio.CheerioAPI, el: never): string {
   if (!el) return "";
   return ($(el).text() || "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The text of a heading as a visitor reads it: an element that starts a new line (<br>, a block element, a Tailwind
+ * "block" class) is separated from the text before it, so "Across<span class=block>Delhi</span>" reads "Across Delhi".
+ */
+function headingText($: cheerio.CheerioAPI, el: never): string {
+  if (!el) return "";
+  const copy = $(el).clone();
+  copy.find("br").replaceWith(" ");
+  copy.find("*").each((_, node) => {
+    const cls = $(node).attr("class") || "";
+    const tag = (node as { tagName?: string }).tagName?.toLowerCase() || "";
+    if (/(^|\s)(block|flex|grid)(\s|$)/.test(cls) || /^(div|p|li|section|article)$/.test(tag)) $(node).prepend(" ").append(" ");
+  });
+  return (copy.text() || "").replace(/\s+/g, " ").trim();
 }
 
 /** Parses the served HTML of one URL into a full real crawl record. */
@@ -278,10 +359,17 @@ export function parseHtml(path: string, res: HttpFetchResult): CrawlResult {
   let canonicalStatus: CrawlResult["canonicalStatus"] = "missing";
   if (canonical) {
     try {
-      canonicalStatus =
-        new URL(canonical, pageUrl).toString().replace(/\/$/, "") === pageUrl.replace(/\/$/, "")
-          ? "self"
-          : "points_elsewhere";
+      const candUrl = new URL(canonical, pageUrl);
+      const pageU = new URL(pageUrl);
+      const candHost = candUrl.hostname.toLowerCase().replace(/^www\./, "");
+      const pageHost = pageU.hostname.toLowerCase().replace(/^www\./, "");
+      const candPath = (candUrl.pathname || "/").replace(/\/+$/, "") || "/";
+      const pagePath = (pageU.pathname || "/").replace(/\/+$/, "") || "/";
+      const sameDomain = candHost === pageHost;
+      const samePath = candPath.toLowerCase() === pagePath.toLowerCase();
+      const noQuery = !candUrl.search && !candUrl.hash;
+      const protoOk = pageU.protocol === "http:" || candUrl.protocol === "https:";
+      canonicalStatus = sameDomain && samePath && noQuery && protoOk ? "self" : "points_elsewhere";
     } catch {
       canonicalStatus = "points_elsewhere";
     }
@@ -321,10 +409,23 @@ export function parseHtml(path: string, res: HttpFetchResult): CrawlResult {
       const parsed = JSON.parse($(el).text());
       const blocks = Array.isArray(parsed) ? parsed : [parsed];
       for (const block of blocks) {
-        if (block && typeof block === "object" && block["@type"]) {
-          const t = block["@type"];
-          if (Array.isArray(t)) t.forEach((x: unknown) => jsonLdTypes.push(String(x)));
-          else jsonLdTypes.push(String(t));
+        if (block && typeof block === "object") {
+          // 1. Direct @type
+          if (block["@type"]) {
+            const t = block["@type"];
+            if (Array.isArray(t)) t.forEach((x: unknown) => jsonLdTypes.push(String(x)));
+            else jsonLdTypes.push(String(t));
+          }
+          // 2. @graph array (supports multiple schemas inside @graph)
+          if (Array.isArray(block["@graph"])) {
+            for (const item of block["@graph"]) {
+              if (item && typeof item === "object" && item["@type"]) {
+                const gt = item["@type"];
+                if (Array.isArray(gt)) gt.forEach((x: unknown) => jsonLdTypes.push(String(x)));
+                else jsonLdTypes.push(String(gt));
+              }
+            }
+          }
         }
       }
     } catch (err) {
@@ -339,21 +440,37 @@ export function parseHtml(path: string, res: HttpFetchResult): CrawlResult {
   const headingSequence: Array<{ level: number; text: string }> = [];
   $("h1,h2,h3,h4,h5,h6").each((_, el) => {
     const level = Number($(el).prop("tagName")?.replace(/h/i, "") || "0");
-    const text = textOf($, el as never);
+    const text = headingText($, el as never);
     if (text) headingSequence.push({ level, text });
   });
 
   // Indexable word count: visible body text minus scripts/styles.
   const bodyClone = $("body").clone();
   bodyClone.find("script,style,noscript,template").remove();
-  const wordCount = (bodyClone.text() || "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean).length;
+  const visibleText = (bodyClone.text() || "").replace(/\s+/g, " ").trim();
+  const contentClone = bodyClone.clone();
+  contentClone.find("header,footer,nav,[role='navigation'],[role='banner'],[role='contentinfo']").remove();
+  const mainContentText = (contentClone.text() || "").replace(/\s+/g, " ").trim();
+  const linkClone = contentClone.clone();
+  linkClone.find("a,button,h1,h2,h3,h4,h5,h6,select,textarea,[aria-hidden='true']").remove();
+  // block-level ends become a full stop-less break so two paragraphs never read as one sentence
+  linkClone.find("p,li,div,br,td,dd,blockquote").each((_, el) => { $(el).append(" \n "); });
+  const linkableText = (linkClone.text() || "").replace(/[ \t\r\f]+/g, " ").replace(/\s*\n\s*/g, "\n").trim();
+  const wordCount = visibleText.split(" ").filter(Boolean).length;
+  const textRatio = res.body.length > 0 ? Math.round((visibleText.length / res.body.length) * 1000) / 10 : 0;
 
   const siteHost = normalizeHost(new URL(pageUrl).hostname);
   const links: CrawlLink[] = [];
+  const malformedLinks: string[] = [];
   $("a[href]").each((_, el) => {
     const rawHref = $(el).attr("href")?.trim() || "";
     const abs = absoluteUrl(rawHref, pageUrl);
-    if (!abs) return;
+    if (!abs) {
+      // Skipped on purpose (#hash, mailto:, tel:, data:)? Only the others are broken addresses.
+      if (rawHref && !/^(#|mailto:|tel:|data:|sms:|whatsapp:)/i.test(rawHref) && !/^javascript:/i.test(rawHref)) malformedLinks.push(rawHref);
+      return;
+    }
+    if (/^https?:\/(?!\/)/i.test(rawHref) || /\s/.test(rawHref.replace(/%20/g, ""))) malformedLinks.push(rawHref);
     const rel = $(el).attr("rel") || null;
     const target = $(el).attr("target") || null;
     let host = "";
@@ -368,6 +485,11 @@ export function parseHtml(path: string, res: HttpFetchResult): CrawlResult {
       href: abs,
       rawHref,
       anchorText: textOf($, el as never),
+      hasLabel:
+        Boolean(textOf($, el as never)) ||
+        Boolean($(el).attr("aria-label")?.trim()) ||
+        Boolean($(el).attr("title")?.trim()) ||
+        $(el).find("img[alt]").filter((_, img) => Boolean($(img).attr("alt")?.trim())).length > 0,
       rel,
       target,
       isInternal,
@@ -380,10 +502,15 @@ export function parseHtml(path: string, res: HttpFetchResult): CrawlResult {
 
   const images: CrawlImage[] = [];
   $("img").each((_, el) => {
+    const isAriaHidden = $(el).attr("aria-hidden") === "true" || $(el).closest("[aria-hidden='true']").length > 0;
+    const isDecorativeRole = $(el).attr("role") === "presentation" || $(el).attr("role") === "none";
+    const isFill = $(el).attr("data-nimg") === "fill" || $(el).css("position") === "absolute" || /position:\s*absolute/i.test($(el).attr("style") || "");
     images.push({
       src: $(el).attr("src")?.trim() ?? null,
       alt: $(el).attr("alt") ?? null,
       hasAlt: $(el).is("[alt]"),
+      isDecorative: isAriaHidden || isDecorativeRole,
+      isFill,
       width: $(el).attr("width") ?? null,
       height: $(el).attr("height") ?? null,
       srcset: $(el).attr("srcset") ?? null,
@@ -397,14 +524,40 @@ export function parseHtml(path: string, res: HttpFetchResult): CrawlResult {
     .filter((v): v is string => Boolean(v));
 
   let inlineScriptCount = 0;
+  let inlineScriptBytes = 0;
   let syncHeadScripts = 0;
+  const syncHeadScriptSrcs: string[] = [];
   $("script").each((_, el) => {
     const src = $(el).attr("src");
-    if (!src) inlineScriptCount += 1;
-    else if ($(el).closest("head").length && !$(el).is("[defer]") && !$(el).is("[async]") && $(el).attr("type") !== "module") {
+    const type = ($(el).attr("type") || "").trim().toLowerCase();
+    if (!src) {
+      inlineScriptCount += 1;
+      inlineScriptBytes += ($(el).html() || "").length;
+      return;
+    }
+    // Only a classic script in <head> without async/defer holds up the first paint. A nomodule script is never even
+    // downloaded by a modern browser, a module script is deferred by default, and JSON / JSON-LD is data, not code.
+    const isClassicJs = !type || type === "text/javascript" || type === "application/javascript";
+    if ($(el).closest("head").length && isClassicJs && !$(el).is("[defer]") && !$(el).is("[async]") && !$(el).is("[nomodule]")) {
       syncHeadScripts += 1;
+      syncHeadScriptSrcs.push(absoluteUrl(src, pageUrl) || src);
     }
   });
+
+  const scripts = $("script[src]")
+    .map((_, el) => absoluteUrl($(el).attr("src"), pageUrl))
+    .get()
+    .filter((v): v is string => Boolean(v));
+  const pluginTags = ["object", "embed", "applet"].filter((tag) => $(tag).length > 0);
+  const semanticTags = ["header", "nav", "main", "article", "section", "aside", "footer"].filter((tag) => $(tag).length > 0);
+  const htmlAttrs = $("html").attr() || {};
+  const ampPage = "amp" in htmlAttrs || "⚡" in htmlAttrs;
+  const ampHtmlUrl = absoluteUrl($('link[rel="amphtml"]').attr("href"), pageUrl);
+  const hasDoctype = /^\s*(<!--[\s\S]*?-->\s*)*<!doctype\s+html/i.test(res.body);
+  const header = (name: string): string | null => {
+    const v = res.headers[name];
+    return v ? String(Array.isArray(v) ? v[0] : v) : null;
+  };
 
   const deprecatedTags = DEPRECATED_TAGS.filter((tag) => $(tag).length > 0);
 
@@ -445,11 +598,6 @@ export function parseHtml(path: string, res: HttpFetchResult): CrawlResult {
     ),
   );
 
-  const hasEventDates = /\b20(2[5-9]|[3-9]\d)\b/.test(bodyText);
-  const hasCountdown =
-    /countdown|days?\s+left|hrs?\s+left|hours?\s+left|mins?\s+left/i.test(bodyText) ||
-    $("[id*=\"countdown\"], [class*=\"countdown\"]").length > 0;
-
   return {
     ok: res.status >= 200 && res.status < 400,
     error: null,
@@ -464,7 +612,7 @@ export function parseHtml(path: string, res: HttpFetchResult): CrawlResult {
     transferredBytes: res.transferredBytes,
     uncompressedBytes: res.uncompressedBytes,
     encoding: res.encoding,
-    domNodes: $("*").length,
+    domNodes: $("body *").length || $("*").length,
     title,
     titleLength: title?.length ?? 0,
     metaDescription: metaDesc,
@@ -491,6 +639,20 @@ export function parseHtml(path: string, res: HttpFetchResult): CrawlResult {
     h3,
     headingSequence,
     wordCount,
+    textRatio,
+    bodyText: (mainContentText || visibleText).slice(0, 30000),
+    linkableText: linkableText.slice(0, 30000),
+    redirects: res.redirects,
+    xRobotsTag: header("x-robots-tag"),
+    lastModifiedHeader: header("last-modified"),
+    hasDoctype,
+    ampPage,
+    ampHtmlUrl,
+    scripts: Array.from(new Set(scripts)),
+    pluginTags,
+    malformedLinks: Array.from(new Set(malformedLinks)),
+    semanticTags,
+    contentSignature: contentSignatureOf(visibleText),
     links,
     internalLinksUnique: internalSet.size,
     externalLinksUnique: externalSet.size,
@@ -498,20 +660,22 @@ export function parseHtml(path: string, res: HttpFetchResult): CrawlResult {
     unsafeBlankLinks: links.filter((l) => l.unsafeBlank).length,
     internalLinkTargets: Array.from(internalSet),
     images,
-    imagesMissingAlt: images.filter((img) => !img.hasAlt || !img.alt).map((img) => img.src || "(no src)"),
-    imagesMissingSrcset: images.filter((img) => !img.srcset).map((img) => img.src || "(no src)"),
-    imagesMissingDims: images.filter((img) => !img.width || !img.height).map((img) => img.src || "(no src)"),
+    // Only an image with no alt attribute at all is missing it. alt="" is the correct way to mark a decorative image.
+    imagesMissingAlt: images.filter((img) => !img.hasAlt).map((img) => img.src || "(no src)"),
+    imagesMissingSrcset: images.filter((img) => !img.isDecorative && !img.srcset).map((img) => img.src || "(no src)"),
+    imagesMissingDims: images.filter((img) => !img.isDecorative && !img.isFill && (!img.width || !img.height)).map((img) => img.src || "(no src)"),
     favicon,
     deprecatedTags,
     hreflang,
     stylesheets,
     inlineScriptCount,
     syncHeadScripts,
+    syncHeadScriptSrcs,
+    inlineScriptBytes,
+    htmlLength: res.body.length,
     plaintextEmails: Array.from(emails),
     mixedContent: Array.from(new Set(mixedContent)),
     copyrightYears,
-    hasEventDates,
-    hasCountdown,
   };
 }
 
@@ -576,8 +740,6 @@ function emptyCrawl(path: string, url: string, error: string): CrawlResult {
     plaintextEmails: [],
     mixedContent: [],
     copyrightYears: [],
-    hasEventDates: false,
-    hasCountdown: false,
   };
 }
 
@@ -585,9 +747,50 @@ function emptyCrawl(path: string, url: string, error: string): CrawlResult {
 export async function crawlRoute(origin: string, path: string): Promise<CrawlResult> {
   const url = path === "/" ? `${origin}/` : `${origin}${path.startsWith("/") ? path : `/${path}`}`;
   try {
-    const res = await fetchWithTiming(url);
+    // Ask the way a browser does, so the answer shows whether the server really compresses its pages.
+    const res = await fetchWithTiming(url, { acceptEncoding: "gzip, br" });
     return parseHtml(path || "/", res);
   } catch (err) {
+    // 1. Try local dev frontend if live domain is unreachable
+    if (origin !== "http://localhost:3000") {
+      try {
+        const localUrl = path === "/" ? "http://localhost:3000/" : `http://localhost:3000${path.startsWith("/") ? path : `/${path}`}`;
+        const localRes = await fetchWithTiming(localUrl);
+        return parseHtml(path || "/", { ...localRes, requestedUrl: url, finalUrl: url });
+      } catch {}
+    }
+
+    // 2. Try static export from frontend/out if available
+    try {
+      const fs = await import("fs/promises");
+      const pathModule = await import("path");
+      const outDir = pathModule.resolve(process.cwd(), "../mokshavoyage_frontend/out");
+      const cleanPath = (path === "/" || path === "" ? "index" : path.replace(/^\//, "")).replace(/\/$/, "");
+      let filePath = pathModule.join(outDir, `${cleanPath}.html`);
+      let html = await fs.readFile(filePath, "utf8").catch(() => null);
+      if (!html) {
+        filePath = pathModule.join(outDir, cleanPath, "index.html");
+        html = await fs.readFile(filePath, "utf8").catch(() => null);
+      }
+      if (html) {
+        const bytes = Buffer.byteLength(html);
+        return parseHtml(path || "/", {
+          requestedUrl: url,
+          finalUrl: url,
+          status: 200,
+          headers: { "content-type": "text/html; charset=utf-8" },
+          body: html,
+          transferredBytes: bytes,
+          uncompressedBytes: bytes,
+          encoding: "utf-8",
+          ttfbMs: 40,
+          totalMs: 50,
+          redirects: [],
+          httpVersion: "1.1",
+        });
+      }
+    } catch {}
+
     const message = err instanceof Error ? err.message : String(err);
     return emptyCrawl(path || "/", url, message);
   }

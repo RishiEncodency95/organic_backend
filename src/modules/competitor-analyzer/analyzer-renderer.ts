@@ -32,6 +32,7 @@ export async function createAnalyzerRenderer(deps: SafeFetchDeps): Promise<Analy
   if (process.env.NODE_ENV === 'test' || process.env.COMPETITOR_BROWSER_RENDERING_ENABLED === 'false') return null;
   const executablePath = browserExecutable();
   if (!executablePath) return null;
+  // @ts-ignore playwright-core is optional
   const { chromium } = await import('playwright-core');
   const browser = await chromium.launch({ executablePath, headless: true, args: ['--disable-quic', '--force-webrtc-ip-handling-policy=disable_non_proxied_udp'] });
   const context = await browser.newContext({
@@ -81,8 +82,8 @@ export async function createAnalyzerRenderer(deps: SafeFetchDeps): Promise<Analy
   let requests = 0;
   let bytes = 0;
   // Chromium never opens an origin socket: every resource uses the pinned, redirect-checked Node client.
-  await context.routeWebSocket('**/*', socket => socket.close());
-  await context.route('**/*', async (route) => {
+  await context.routeWebSocket('**/*', (socket: any) => socket.close());
+  await context.route('**/*', async (route: any) => {
     try {
       const target = new URL(route.request().url());
       if (!['http:', 'https:'].includes(target.protocol) || !['GET', 'HEAD'].includes(route.request().method()) || ++requests > 600 || bytes > 60_000_000) {

@@ -16,6 +16,7 @@ import seoRouter from "../modules/seo/seo.routes";
 import seoAuditRouter from "../modules/seoAudit/seoAudit.routes";
 import advancedSeoRouter from "../modules/seo/advancedSeo.routes";
 import backlinkRouter from "../modules/seo/backlink.routes";
+import competitorAnalyzerRouter, { competitorPublicRouter } from "../modules/competitorAnalyzer/competitorAnalyzer.routes";
 import settingsRouter from "../modules/settings/settings.routes";
 import websiteWhyExhibitRouter from "../modules/website/websiteWhyExhibit.routes";
 import websiteExhibitorListRouter from "../modules/website/websiteExhibitorList.routes";
@@ -140,6 +141,8 @@ router.use("/", exhibitorPublicRouter);
 router.use("/exhibitor-registrations", exhibitorAdminRouter);
 router.use("/verify", verifyRouter);
 router.use("/website/verify", verifyRouter);
+router.use("/admin/competitor-analyzer", competitorAnalyzerRouter);
+router.use("/public/competitor-reports", competitorPublicRouter);
 
 router.use('/competitor-analyzer', analyzerRouter);
 router.use('/public/competitor-reports', publicReportsRouter);

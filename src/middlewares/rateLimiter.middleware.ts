@@ -113,3 +113,29 @@ export const pincodeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+
+/** Public SEO report download links: cap requests per network */
+export const reportDownloadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: new ApiError(429, "Too many report downloads. Please wait a minute and try again."),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const notFoundReportLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: new ApiError(429, "Too many 404 reports."),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const publicSeoReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: new ApiError(429, "Too many SEO read requests."),
+  standardHeaders: true,
+  legacyHeaders: false,
+});
