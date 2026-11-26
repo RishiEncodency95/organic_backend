@@ -11,12 +11,23 @@
  * says so — it is never silently replaced by a fabricated pass.
  */
 
+import { isGenericAlt } from "./altText";
+import { RECOMMENDED_DESC, RECOMMENDED_TITLE, computeRouteScore, pageFindings } from "./pageFindings.service";
+
+const TITLE_MIN = RECOMMENDED_TITLE.min;
+const TITLE_MAX = RECOMMENDED_TITLE.max;
+import { getSiteHost, getSiteName } from "../../config/seoSite";
 import type { CrawlResult } from "./crawler.service";
 import type { SiteChecks } from "./siteChecks.service";
+import { brokenLinksOf, type LinkStatusMap } from "./linkCheck.service";
+import { buildAuditContext, buildAuditGroups } from "./siteAudit.checks";
+import { buildChecklist } from "./checklist.service";
 import type { GscResult } from "./gsc.service";
 import type {
   CheckupGroup,
+  CheckupFixKind,
   CheckupIssue,
+  CheckupStatus,
   CheckupTest,
   LlmPlatformResult,
   PageSpeedSnapshot,
@@ -31,8 +42,37 @@ export interface ReportBuilderInput {
   crawls: CrawlResult[];
   siteChecks: SiteChecks;
   pageSpeed: PageSpeedSnapshot | null;
+  pageSpeedDesktop?: PageSpeedSnapshot | null;
   gsc: GscResult;
   llm: LlmPlatformResult[];
+  /** Whether each link found on the crawled pages works. Absent on audits stored before links were followed. */
+  linkStatuses?: LinkStatusMap | null;
+}
+
+/**
+ * Who can fix each kind of check, and (for the admin) which issue of the "Issues to fix" list does it. A check that is
+ * not listed here is a rule about the website's code or build.
+ */
+const ADMIN_FIX: Record<string, string> = {
+  "meta-title": "title",
+  "meta-description": "description",
+  "social-meta": "og",
+  "heading-tags": "h1",
+  "image-alt": "image_alt",
+  "structured-data": "schema",
+  "canonical": "canonical",
+  "noindex": "robots",
+  "nofollow": "robots",
+};
+const CONTENT_FIX = new Set(["keywords-usage", "internal-linking", "content-freshness"]);
+const SERVER_FIX = new Set(["canonicalization", "ssl", "http-redirect", "hsts", "http2", "ttfb"]);
+
+function fixKindOf(testId: string, groupId: string): { fixKind: CheckupFixKind; adminIssueType?: string } {
+  if (ADMIN_FIX[testId]) return { fixKind: "admin", adminIssueType: ADMIN_FIX[testId] };
+  if (testId === "mixed-content") return { fixKind: "developer" };
+  if (CONTENT_FIX.has(testId)) return { fixKind: "content" };
+  if (SERVER_FIX.has(testId) || groupId === "server-security") return { fixKind: "server" };
+  return { fixKind: "developer" };
 }
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -45,7 +85,7 @@ function groupScore(tests: CheckupTest[]): number {
   if (tests.length === 0) return 0;
   const passed = tests.filter((t) => t.status === "passed").length;
   const warned = tests.filter((t) => t.status === "warning").length;
-  return clamp(Math.round(((passed + warned * 0.5) / tests.length) * 100), 0, 99);
+  return clamp(Math.round(((passed + warned * 0.5) / tests.length) * 100), 0, 100);
 }
 
 function count(tests: CheckupTest[]) {
@@ -86,19 +126,8 @@ export function buildRouteSummaries(
         })
       : undefined;
 
-    const titleOk = crawl.titleLength >= 20 && crawl.titleLength <= 60;
-    const descOk = crawl.descriptionLength >= 120 && crawl.descriptionLength <= 220;
-    const h1Ok = crawl.h1.length === 1;
-    const basics =
-      (crawl.ok ? 2 : 0) +
-      (titleOk ? 1 : 0) +
-      (descOk ? 1 : 0) +
-      (h1Ok ? 1 : 0) +
-      (crawl.canonicalStatus === "self" ? 1 : 0) +
-      (crawl.imagesMissingAlt.length === 0 ? 1 : 0) +
-      (crawl.viewport ? 1 : 0) +
-      (crawl.jsonLdBlocks > 0 && crawl.jsonLdValid ? 1 : 0);
-    const score = clamp(Math.round((basics / 9) * 100), 0, 99);
+    const score = computeRouteScore(crawl);
+    const { items: findings, positives } = pageFindings(crawl);
 
     return {
       id: routeIdFor(crawl.requestedPath),
@@ -126,9 +155,9 @@ export function buildRouteSummaries(
       htmlKb: crawl.uncompressedBytes ? round(crawl.uncompressedBytes / 1024, 1) : null,
       ttfbMs: crawl.ok ? crawl.ttfbMs : null,
       loadMs: crawl.ok ? crawl.totalMs : null,
-      failedChecks: 0,
-      warningChecks: 0,
-      passedChecks: 0,
+      failedChecks: findings.filter((f) => f.priority === "high").length,
+      warningChecks: findings.filter((f) => f.priority !== "high").length,
+      passedChecks: positives.length,
       searchConsole: gscRow
         ? { available: true, clicks: gscRow.clicks, impressions: gscRow.impressions, ctr: gscRow.ctr, position: gscRow.position }
         : { available: false, clicks: null, impressions: null, ctr: null, position: null },
@@ -170,7 +199,8 @@ function buildPageSpeedGroup(ps: PageSpeedSnapshot): CheckupGroup {
     };
   }
 
-  const scoreTest = (id: string, name: string, value: number | null, note: string): CheckupTest => ({
+  const scoreTest = (id: string, name: string, value: number | null, note: string, extra: Pick<CheckupTest, "evidence" | "fix"> = {}): CheckupTest => ({
+    ...extra,
     id: `psi-${id}`,
     name,
     status: status(value),
@@ -188,7 +218,9 @@ function buildPageSpeedGroup(ps: PageSpeedSnapshot): CheckupGroup {
     display: string,
     testStatus: CheckupTest["status"],
     note: string,
+    extra: Pick<CheckupTest, "evidence" | "fix"> = {},
   ): CheckupTest => ({
+    ...extra,
     id: `psi-${id}`,
     name,
     status: testStatus,
@@ -198,33 +230,77 @@ function buildPageSpeedGroup(ps: PageSpeedSnapshot): CheckupGroup {
     meta: [{ label: "Lighthouse lab value", value: display, mono: true }],
   });
 
+  // What Google's run says causes the slowness (only what it returned; nothing is guessed)
+  const dg = ps.diagnostics;
+  const notPassed = (st: CheckupTest["status"]) => st !== "passed";
+  const lcpStatus = vital(m.lcpMs ? m.lcpMs / 1000 : null, 2.5, 4.0);
+  const tbtStatus = vital(m.tbtMs == null ? null : m.tbtMs / 1000, 0.2, 0.6);
+  const siStatus = vital(m.siMs ? m.siMs / 1000 : null, 3.4, 5.8);
+  const blockingLines = (dg?.renderBlocking ?? []).map((r) => `Holds up the first paint by ${r.ms} ms: ${r.url}`);
+  const unusedLines = (dg?.unusedJs ?? []).map((r) => `${r.kb} KB of unused JavaScript: ${r.url}`);
+  const cpuLines = (dg?.scriptCpu ?? []).map((r) => `Keeps the browser busy for ${r.ms} ms: ${r.url}`);
+  const lcpParts = dg?.lcpBreakdown ?? [];
+  const biggestLcpPart = [...lcpParts].sort((a, b) => b.ms - a.ms)[0];
+  const LCP_ADVICE: Record<string, string> = {
+    "time to first byte": "The server answers slowly. Check the hosting / cache (Cloudflare caching of the HTML).",
+    "resource load delay": "The largest image starts downloading late. A developer can load it first (preload it or give it fetchpriority=\"high\") so it starts at once.",
+    "resource load duration": "The largest image itself takes long to download. Serve a smaller, better-compressed version for this screen size.",
+    "element render delay": "The image is ready but painted late, usually because scripts or stylesheets are still running. Reduce what loads before it.",
+  };
+  const lcpExtra: Pick<CheckupTest, "evidence" | "fix"> =
+    dg && notPassed(lcpStatus)
+      ? {
+          evidence: [
+            ...(dg.lcpElement ? [`Largest element: ${dg.lcpElement}`] : []),
+            ...lcpParts.map((p) => `${p.label}: ${p.ms} ms`),
+          ],
+          fix: biggestLcpPart ? `Biggest part is "${biggestLcpPart.label}" (${biggestLcpPart.ms} ms). ${LCP_ADVICE[biggestLcpPart.label.toLowerCase()] ?? ""} This is a change in the website's code.`.trim() : undefined,
+        }
+      : {};
+  const tbtExtra: Pick<CheckupTest, "evidence" | "fix"> =
+    dg && notPassed(tbtStatus) && cpuLines.length
+      ? { evidence: cpuLines, fix: "These scripts keep the browser busy. Load tag scripts (Tag Manager, Analytics, Facebook) after the page is interactive or remove the ones not needed; a developer can split the website's own code." }
+      : {};
+  const siExtra: Pick<CheckupTest, "evidence" | "fix"> =
+    dg && notPassed(siStatus) && blockingLines.length
+      ? { evidence: blockingLines, fix: "These files must load before anything is shown. A developer can inline the critical CSS and load the rest later." }
+      : {};
+  const perfExtra: Pick<CheckupTest, "evidence" | "fix"> =
+    dg && sc.performance != null && sc.performance < 90 && (blockingLines.length || unusedLines.length)
+      ? { evidence: [...blockingLines.slice(0, 3), ...unusedLines.slice(0, 3)], fix: "The biggest savings Google found are listed above. They are changes in the website's code, not in the admin." }
+      : {};
+
   const tests: CheckupTest[] = [
-    scoreTest("performance", "PageSpeed Performance Score", sc.performance, "Weighted from FCP, LCP, TBT, CLS and Speed Index for this route."),
+    scoreTest("performance", "PageSpeed Performance Score", sc.performance, "Weighted from FCP, LCP, TBT, CLS and Speed Index for this route.", perfExtra),
     scoreTest("accessibility", "PageSpeed Accessibility Score", sc.accessibility, "Lighthouse accessibility audits: contrast, labels, names, keyboard order."),
     scoreTest("best-practices", "PageSpeed Best Practices Score", sc.bestPractices, "HTTPS, console errors, image quality, document metadata and deprecations."),
     scoreTest("seo", "PageSpeed SEO Score", sc.seo, "Google's own on-page SEO checks: title, meta description, link text, crawlability, viewport."),
     metricTest("fcp", "First Contentful Paint", m.fcpMs, m.fcpMs == null ? "not returned" : `${round(m.fcpMs / 1000, 2)}s`, vital(m.fcpMs ? m.fcpMs / 1000 : null, 1.8, 3.0), "How long the first text or image paints. Good is ≤ 1.8s, poor above 3.0s."),
-    metricTest("lcp", "Largest Contentful Paint", m.lcpMs, m.lcpMs == null ? "not returned" : `${round(m.lcpMs / 1000, 2)}s`, vital(m.lcpMs ? m.lcpMs / 1000 : null, 2.5, 4.0), "When the largest above-the-fold element paints. Good is ≤ 2.5s, poor above 4.0s."),
-    metricTest("tbt", "Total Blocking Time", m.tbtMs, m.tbtMs == null ? "not returned" : `${m.tbtMs}ms`, vital(m.tbtMs == null ? null : m.tbtMs / 1000, 0.2, 0.6), "Main-thread work that blocks interaction. Good is ≤ 200ms, poor above 600ms."),
+    metricTest("lcp", "Largest Contentful Paint", m.lcpMs, m.lcpMs == null ? "not returned" : `${round(m.lcpMs / 1000, 2)}s`, lcpStatus, "When the largest above-the-fold element paints. Good is ≤ 2.5s, poor above 4.0s.", lcpExtra),
+    metricTest("tbt", "Total Blocking Time", m.tbtMs, m.tbtMs == null ? "not returned" : `${m.tbtMs}ms`, tbtStatus, "Main-thread work that blocks interaction. Good is ≤ 200ms, poor above 600ms.", tbtExtra),
     metricTest("cls", "Cumulative Layout Shift", m.cls, m.cls == null ? "not returned" : String(round(m.cls, 4)), vital(m.cls, 0.1, 0.25), "Visual stability of the page. Good is ≤ 0.1, poor above 0.25."),
-    metricTest("si", "Speed Index", m.siMs, m.siMs == null ? "not returned" : `${round(m.siMs / 1000, 2)}s`, vital(m.siMs ? m.siMs / 1000 : null, 3.4, 5.8), "How quickly the page fills in visually. Good is ≤ 3.4s, poor above 5.8s."),
-    {
-      id: "psi-crux",
-      name: "Real-user field data (Chrome UX Report)",
-      status: ps.fieldData.available ? (ps.fieldData.overall?.toUpperCase() === "GOOD" ? "passed" : ps.fieldData.overall ? "warning" : "warning") : "warning",
-      level: "page",
-      source: "measured",
-      summary: ps.fieldData.available
-        ? `Chrome UX Report reports ${ps.fieldData.overall ?? "a"} experience for this origin.`
-        : "Chrome UX Report field data is not available for this origin yet (site needs more real traffic over time).",
-      meta: [{ label: "CrUX origin data", value: ps.fieldData.available ? (ps.fieldData.overall ?? "available") : "not available" }],
-    },
+    metricTest("si", "Speed Index", m.siMs, m.siMs == null ? "not returned" : `${round(m.siMs / 1000, 2)}s`, siStatus, "How quickly the page fills in visually. Good is ≤ 3.4s, poor above 5.8s.", siExtra),
+    // Real-user data only exists once Google has collected enough visits; without it there is nothing to judge, so it
+    // is not a check (the group note says it is not available yet) instead of a warning nobody can fix.
+    ...(ps.fieldData.available
+      ? [
+          {
+            id: "psi-crux",
+            name: "Real-user field data (Chrome UX Report)",
+            status: (ps.fieldData.overall?.toUpperCase() === "GOOD" ? "passed" : "warning") as CheckupStatus,
+            level: "page" as const,
+            source: "measured" as const,
+            summary: `Chrome UX Report reports ${ps.fieldData.overall ?? "a"} experience for this origin.`,
+            meta: [{ label: "CrUX origin data", value: ps.fieldData.overall ?? "available" }],
+          },
+        ]
+      : []),
   ];
 
   return {
     id: "page-speed",
     name: "Google PageSpeed Insights (Lighthouse)",
-    note: `Live Google PageSpeed Insights run for ${ps.strategy}, fetched ${new Date(ps.fetchedAt).toLocaleString("en-IN")}${ps.cached ? " (cached ≤6h)" : ""}.`,
+    note: `Live Google PageSpeed Insights run for ${ps.strategy}, fetched ${new Date(ps.fetchedAt).toLocaleString("en-IN")}${ps.cached ? " (cached ≤6h)" : ""}.${ps.fieldData.available ? "" : " Real-user data (Chrome UX Report) is not available for this site yet: Google shows it once enough people have visited."}`,
     score: groupScore(tests),
     tests,
   };
@@ -278,7 +354,7 @@ function buildAiInsightsGroup(crawl: CrawlResult, gsc: GscResult): CheckupGroup 
           ],
         },
       ],
-      fix: "Add leadership bios, cited sources and certification proof, and link this route from the main navigation to lift Content Trust above 60%.",
+      fix: "Add author or team bios, cited sources and proof of credentials, and link this route from the main navigation to lift Content Trust above 60%.",
     },
   ];
 
@@ -334,7 +410,7 @@ function buildLlmGroup(llm: LlmPlatformResult[]): CheckupGroup {
       p.platform,
       p.model,
       mentioned > 0 ? `✓ Mentioned (${mentioned}/${p.results.length})` : "✗ Not mentioned",
-      cited > 0 ? `bharatorganicexpo.com cited (${cited}/${p.results.length})` : "No domain citation",
+      cited > 0 ? `${getSiteHost().replace(/^www\./, "")} cited (${cited}/${p.results.length})` : "No domain citation",
     ];
   });
 
@@ -381,7 +457,7 @@ function buildLlmGroup(llm: LlmPlatformResult[]): CheckupGroup {
 function buildVisualGroup(crawl: CrawlResult): CheckupGroup {
   const titleReadable = crawl.titleLength >= 20 && crawl.titleLength <= 70;
   const hasCtaLinks = crawl.links.some((l) =>
-    /register|participate|sponsor|book|stall|exhibit/i.test(l.anchorText),
+    /book|register|enquir|inquir|contact|call|quote|request|schedule|apply|sign ?up|pre-?book|donate/i.test(l.anchorText),
   );
   const singleH1 = crawl.h1.length === 1;
   const longScroll = crawl.wordCount > 1200 && crawl.images.length > 20;
@@ -420,9 +496,9 @@ function buildVisualGroup(crawl: CrawlResult): CheckupGroup {
       level: "page",
       source: "crawl",
       summary: hasCtaLinks
-        ? "Register / Participate / Sponsor style CTAs were found in this route's live links."
-        : "No obvious register/participate/sponsor CTA anchor text was found in this route's links.",
-      fix: hasCtaLinks ? undefined : "Add at least one descriptive CTA link (Book a Stall / Register) in the main content.",
+        ? "Book / Register / Enquire / Contact style CTAs were found in this route's live links."
+        : "No obvious book/register/enquire/contact CTA anchor text was found in this route's links.",
+      fix: hasCtaLinks ? undefined : "Add at least one descriptive CTA link (for example Book / Enquire / Contact us) in the main content.",
     },
     {
       id: "visual-hierarchy",
@@ -473,8 +549,6 @@ function buildFreshnessGroup(crawls: CrawlResult[], siteChecks: SiteChecks): Che
 
   const positive: string[] = [];
   const staleness: string[] = [];
-  if (home?.hasEventDates) positive.push("Explicit event-year dates are present in the live copy");
-  if (home?.hasCountdown) positive.push("A countdown / time-left element is present");
   if (newestLastmod && lastmodDays !== null && lastmodDays <= 30) {
     positive.push(`Sitemap lastmod entries updated ${lastmodDays} day(s) ago (${newestLastmod})`);
   } else if (!newestLastmod) {
@@ -513,19 +587,15 @@ function buildFreshnessGroup(crawls: CrawlResult[], siteChecks: SiteChecks): Che
 
 function buildOpportunitiesGroup(crawls: CrawlResult[]): CheckupGroup {
   const paths = new Set(crawls.map((c) => c.requestedPath));
-  const hasSpeaker = Array.from(paths).some((p) => /speaker|conference/i.test(p));
   const blogPosts = crawls.filter((c) => c.requestedPath.startsWith("/blog/") && c.ok);
   const thinPages = crawls.filter((c) => c.ok && c.wordCount < 300);
 
   const recommendations: string[] = [];
-  if (!hasSpeaker) {
-    recommendations.push("Add a speaker lineup page with names, roles, and session topics for the conference.");
-  }
   if (!paths.has("/faq")) {
-    recommendations.push("Publish an FAQ page (with FAQPage schema) covering eligibility, scheduling and registration format.");
+    recommendations.push("Publish an FAQ page (with FAQPage schema) covering the questions customers ask most before they get in touch.");
   }
   if (blogPosts.length < 5) {
-    recommendations.push(`Only ${blogPosts.length} blog post(s) exist on the live sitemap — publish topical cluster content (certification explainers, category guides) to grow organic reach.`);
+    recommendations.push(`Only ${blogPosts.length} blog post(s) exist on the live sitemap — publish topical content that answers the questions your customers search for, to grow organic reach.`);
   }
   if (thinPages.length > 0) {
     recommendations.push(`${thinPages.length} route(s) serve under 300 words (${thinPages.slice(0, 5).map((c) => c.requestedPath).join(", ")}${thinPages.length > 5 ? ", …" : ""}) — expand or consolidate them.`);
@@ -554,13 +624,71 @@ function buildOpportunitiesGroup(crawls: CrawlResult[]): CheckupGroup {
   };
 }
 
-function buildCommonSeoGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin: string): CheckupGroup {
+/** Pages that link to each page, among the audited pages (a page is not counted as linking to itself). */
+function incomingLinkCount(target: CrawlResult, crawls: CrawlResult[]): number {
+  const cleanPath = (p: string) => p.replace(/\/+$/, "") || "/";
+  const targetPath = cleanPath(new URL(target.url).pathname);
+  const bareHost = (h: string) => h.toLowerCase().replace(/^www\./, "");
+  const host = bareHost(new URL(target.url).hostname);
+  let count = 0;
+  for (const page of crawls) {
+    if (!page.ok || page === target) continue;
+    const linked = (page.links ?? []).some((link) => {
+      if (!link.isInternal) return false;
+      try {
+        const u = new URL(link.href, page.url);
+        return bareHost(u.hostname) === host && cleanPath(u.pathname) === targetPath;
+      } catch {
+        return false;
+      }
+    });
+    if (linked) count += 1;
+  }
+  return count;
+}
+
+function buildSitemapTest(crawl: CrawlResult, crawls: CrawlResult[], siteChecks: SiteChecks, inSitemap: boolean): CheckupTest {
+  const base = { id: "sitemap-test", name: "Sitemap Test", level: "site" as const, source: "measured" as const };
+  const sm = siteChecks.sitemap;
+  if (!sm.available) return { ...base, status: "failed", summary: `No reachable sitemap: ${sm.error}` };
+  const paths = new Set(
+    sm.entries.map((e) => {
+      try {
+        return new URL(e.loc).pathname.replace(/\/+$/, "") || "/";
+      } catch {
+        return "";
+      }
+    }),
+  );
+  const audited = crawls.filter((c) => paths.has(new URL(c.url).pathname.replace(/\/+$/, "") || "/"));
+  // A sitemap should list only live, indexable pages: a redirect, an error or a noindex page does not belong in it.
+  const wrong = audited.filter((c) => !c.ok || c.httpStatus !== 200 || !c.indexable || c.canonicalStatus === "points_elsewhere");
+  const insecure = sm.entries.filter((e) => e.loc.startsWith("http://") && siteChecks.origin.startsWith("https://"));
+  const problems = wrong.length + insecure.length;
+  return {
+    ...base,
+    status: problems > 0 ? "failed" : inSitemap ? "passed" : "warning",
+    summary:
+      `Live sitemap at ${sm.url} lists ${sm.entries.length} URL(s); this route ${inSitemap ? "is" : "is NOT"} included. ` +
+      `${audited.length} of them were audited: ${problems === 0 ? "all are live, indexable pages." : `${problems} should not be in the sitemap.`}`,
+    evidence: [
+      ...wrong.map((c) => `${c.url} → ${c.ok ? (c.indexable ? (c.canonicalStatus === "points_elsewhere" ? "canonical points to another page" : `HTTP ${c.httpStatus}`) : "noindex") : `HTTP ${c.httpStatus || "no response"}`}`),
+      ...insecure.map((e) => `${e.loc} → http:// address in an https site`),
+    ].slice(0, 12),
+    fix: problems > 0 ? "Remove these from sitemap.xml (or fix the pages) so it lists only live, indexable https pages." : undefined,
+  };
+}
+
+function buildCommonSeoGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin: string, linkStatuses?: LinkStatusMap | null, crawls: CrawlResult[] = [crawl]): CheckupGroup {
   const title = crawl.title || "";
   const desc = crawl.metaDescription;
   const ogKeys = ["og:title", "og:description", "og:url", "og:image", "og:type"];
-  const ogPresent = ogKeys.filter((k) => crawl.openGraph[k]);
+  // A stored crawl may have lost its empty objects; treat a missing one as "no tags".
+  const openGraph = crawl.openGraph ?? {};
+  const twitterTags = crawl.twitter ?? {};
+  const ogPresent = ogKeys.filter((k) => openGraph[k]);
   const twitterKeys = ["twitter:card", "twitter:title", "twitter:description", "twitter:image"];
-  const twitterPresent = twitterKeys.filter((k) => crawl.twitter[k]);
+  const twitterPresent = twitterKeys.filter((k) => twitterTags[k]);
   const sitemapPaths = new Set(
     siteChecks.sitemap.entries.map((e) => {
       try {
@@ -573,20 +701,37 @@ function buildCommonSeoGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin:
   const inSitemap = sitemapPaths.has(crawl.requestedPath === "/" ? "/" : crawl.requestedPath);
 
   const keywordRows: Array<Array<string | number>> = [];
+  // The page's topic words: the title without the brand ("Moksha Voyage | Funeral & Cremation Services" → funeral,
+  // cremation, services). The brand name is left out: Google shows it on its own, it does not have to be in the
+  // description. The words the page itself uses most come first.
+  const brandWords = new Set(getSiteName().toLowerCase().split(/\s+/));
+  const TITLE_STOP = new Set(["and", "the", "for", "with", "your", "our", "from", "this", "that", "into", "about", "page", "home", "official", "best"]);
+  const titleTopic = title
+    .split(/\s+[|–—-]\s+|\s*\|\s*/)
+    .filter((part) => !part.toLowerCase().split(/\s+/).every((w) => brandWords.has(w.replace(/[^a-z0-9]/g, ""))))
+    .join(" ");
+  const bodyLower = (crawl.bodyText || "").toLowerCase();
+  const occurrences = (w: string) => (bodyLower.match(new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g")) || []).length;
   const keywordCandidates = Array.from(
-    new Set([
-      ...title.split(/\s+/).slice(0, 3).map((w) => w.toLowerCase()).filter((w) => w.length > 3),
-      "bharat organic expo",
-    ]),
-  ).slice(0, 5);
+    new Set(
+      titleTopic
+        .toLowerCase()
+        .split(/[^a-z0-9\u0900-\u097f]+/)
+        .filter((w) => w.length > 3 && !TITLE_STOP.has(w) && !brandWords.has(w)),
+    ),
+  )
+    .sort((a, b) => occurrences(b) - occurrences(a))
+    .slice(0, 3);
   const headingsText = [...crawl.h1, ...crawl.h2, ...crawl.h3].join(" ").toLowerCase();
   const descLower = (desc || "").toLowerCase();
   let keywordsPassing = 0;
+  const missingKeyword: string[] = [];
   for (const kw of keywordCandidates) {
     const inTitle = title.toLowerCase().includes(kw);
     const inDesc = desc ? descLower.includes(kw) : false;
     const inHead = headingsText.includes(kw);
     if (inTitle && inDesc && inHead) keywordsPassing += 1;
+    else missingKeyword.push(`"${kw}" is missing from the ${[!inDesc ? "meta description" : "", !inHead ? "headings" : ""].filter(Boolean).join(" and ")}`);
     keywordRows.push([kw, inTitle ? "✓" : "✗", desc ? (inDesc ? "✓" : "✗") : "n/a", inHead ? "✓" : "✗"]);
   }
   const keywordCoverage = keywordCandidates.length ? keywordsPassing / keywordCandidates.length : 0;
@@ -595,24 +740,30 @@ function buildCommonSeoGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin:
     {
       id: "meta-title",
       name: "Meta Title Test",
-      status: crawl.titleLength >= 20 && crawl.titleLength <= 60 ? "passed" : "warning",
+      status: crawl.titleLength >= TITLE_MIN && crawl.titleLength <= TITLE_MAX ? "passed" : "warning",
       level: "page",
       source: "crawl",
-      summary: `Length: ${crawl.titleLength} characters measured on the live page. Target: 20-60 characters.`,
+      summary: `Length: ${crawl.titleLength} characters measured on the live page. Target: ${TITLE_MIN}-${TITLE_MAX} characters.`,
       meta: [{ label: "Title", value: title || "(missing)" }],
-      fix: crawl.titleLength > 60 ? "Shorten the title to under 60 characters so Google doesn't truncate it." : crawl.titleLength < 20 ? "Expand the title to at least 20 characters with the primary keyword." : undefined,
+      fix: crawl.titleLength > TITLE_MAX ? `Shorten the title to ${TITLE_MAX} characters or fewer so Google doesn't truncate it.` : crawl.titleLength < TITLE_MIN ? `Expand the title to at least ${TITLE_MIN} characters with the primary keyword.` : undefined,
     },
     {
       id: "meta-description",
       name: "Meta Description Test",
-      status: desc && desc.length >= 120 && desc.length <= 220 ? "passed" : desc ? "warning" : "failed",
+      status: desc && desc.length >= RECOMMENDED_DESC.min && desc.length <= RECOMMENDED_DESC.max ? "passed" : desc ? "warning" : "failed",
       level: "page",
       source: "crawl",
       summary: desc
-        ? `Description length measured on the live page: ${desc.length} characters. Target: 120-160 characters for full SERP display.`
+        ? `Description length measured on the live page: ${desc.length} characters. Target: ${RECOMMENDED_DESC.min}-${RECOMMENDED_DESC.max} characters for full SERP display.`
         : "No <meta name=\"description\"> is served on this route.",
       meta: desc ? [{ label: "Text", value: desc }] : undefined,
-      fix: desc ? undefined : "Add a 120-160 character meta description with the primary keyword and a reason to click.",
+      fix: !desc
+        ? `Add a ${RECOMMENDED_DESC.min}-${RECOMMENDED_DESC.max} character meta description with the primary keyword and a reason to click (Issues to fix → Descriptions).`
+        : desc.length > RECOMMENDED_DESC.max
+          ? `Shorten it to ${RECOMMENDED_DESC.max} characters or fewer so Google shows all of it (Issues to fix → Descriptions).`
+          : desc.length < RECOMMENDED_DESC.min
+            ? `Lengthen it to at least ${RECOMMENDED_DESC.min} characters (Issues to fix → Descriptions).`
+            : undefined,
     },
     {
       id: "serp-preview",
@@ -620,7 +771,15 @@ function buildCommonSeoGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin:
       status: crawl.canonicalStatus === "self" && title ? "passed" : "warning",
       level: "page",
       source: "derived",
-      summary: `Canonical URL ${crawl.canonical || crawl.url} with a ${crawl.titleLength}-char title${desc ? ` and ${crawl.descriptionLength}-char description` : " and no description"} renders a valid desktop/mobile snippet.`,
+      summary:
+        crawl.canonicalStatus === "self" && title
+          ? `Canonical URL ${crawl.canonical || crawl.url} with a ${crawl.titleLength}-char title${desc ? ` and ${crawl.descriptionLength}-char description` : " and no description"} renders a valid desktop/mobile snippet.`
+          : !title
+            ? "The page has no title, so Google has to make up the headline of its search result."
+            : `The canonical link points to ${crawl.canonical || "nothing"}, not to this page (${crawl.url}), so Google may show a different address in the search result.`,
+      fix: crawl.canonicalStatus === "self" && title ? undefined : !title ? "Add a page title (Issues to fix → Page titles)." : "Fix the Canonical Tag Test below; this check follows it.",
+      // the cause decides who fixes it: a missing title or canonical is in the Issues list, a wrong canonical is edited in the page's SEO
+      ...(!title ? { fixKind: "admin" as const, adminIssueType: "title" } : crawl.canonicalStatus !== "self" ? { fixKind: "admin" as const, adminIssueType: "canonical" } : { fixKind: "content" as const }),
     },
     {
       id: "social-meta",
@@ -633,28 +792,29 @@ function buildCommonSeoGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin:
         {
           title: "Open Graph",
           headers: ["Tag", "Content"],
-          rows: ogKeys.map((k) => [k, crawl.openGraph[k] || "missing"]),
+          rows: ogKeys.map((k) => [k, openGraph[k] || "missing"]),
         },
         {
           title: "Twitter Card",
           headers: ["Tag", "Content"],
-          rows: twitterKeys.map((k) => [k, crawl.twitter[k] || "missing"]),
+          rows: twitterKeys.map((k) => [k, twitterTags[k] || "missing"]),
         },
       ],
     },
     {
       id: "keywords-usage",
       name: "Keywords Usage Test",
-      status: keywordCoverage >= 0.66 ? "passed" : keywordCoverage > 0 ? "warning" : "failed",
+      status: !keywordCandidates.length ? "warning" : keywordCoverage >= 0.66 ? "passed" : keywordCoverage > 0 ? "warning" : "failed",
       level: "page",
       source: "derived",
       summary: keywordCandidates.length
-        ? `${keywordsPassing}/${keywordCandidates.length} tracked terms appear in title + meta description + headings of the live page.`
-        : "No keywords could be extracted from this page's title.",
+        ? `${keywordsPassing}/${keywordCandidates.length} topic words of the title (${keywordCandidates.join(", ")}) also appear in the meta description and the headings of the live page.`
+        : "The title has no topic words besides the brand name, so there is nothing to compare.",
+      evidence: missingKeyword.length ? missingKeyword : undefined,
       tables: [
         { headers: ["Keyword", "Title tag", "Meta description", "Headings"], rows: keywordRows },
       ],
-      fix: keywordCoverage >= 0.66 ? undefined : "Carry the primary keyword into the meta description and at least one H2 on this route.",
+      fix: keywordCoverage >= 0.66 ? undefined : "Use the missing topic words listed above in the meta description and in at least one heading of this page (both can be changed from the admin).",
     },
     {
       id: "heading-tags",
@@ -664,7 +824,12 @@ function buildCommonSeoGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin:
       source: "crawl",
       summary: `Detected ${crawl.h1.length} H1, ${crawl.h2.length} H2 and ${crawl.h3.length} H3 tags in the live HTML.`,
       lists: [{ title: "Detected H1 Tags", items: crawl.h1.length ? crawl.h1 : ["(none)"] }],
-      fix: crawl.h1.length === 1 ? undefined : "Keep exactly one descriptive H1 per route; demote banner headings to H2.",
+      fix:
+        crawl.h1.length === 1
+          ? undefined
+          : crawl.h1.length > 1 && new Set(crawl.h1.map((h) => h.trim().toLowerCase())).size === 1
+            ? "The same H1 text is in the page twice (often one copy for mobile and one for desktop). Render a single H1 and switch its look with CSS."
+            : "Keep exactly one descriptive H1 per route; demote banner headings to H2.",
     },
     {
       id: "robots-txt",
@@ -676,23 +841,14 @@ function buildCommonSeoGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin:
         ? `Live robots.txt served at ${siteChecks.robotsTxt.url} with ${siteChecks.robotsTxt.rules.length} rule group(s) and ${siteChecks.robotsTxt.sitemaps.length} sitemap pointer(s).`
         : `robots.txt check failed: ${siteChecks.robotsTxt.error}`,
     },
-    {
-      id: "sitemap-test",
-      name: "Sitemap Test",
-      status: siteChecks.sitemap.available && inSitemap ? "passed" : siteChecks.sitemap.available ? "warning" : "failed",
-      level: "site",
-      source: "measured",
-      summary: siteChecks.sitemap.available
-        ? `Live sitemap at ${siteChecks.sitemap.url} lists ${siteChecks.sitemap.entries.length} URL(s); this route ${inSitemap ? "is" : "is NOT"} included.`
-        : `No reachable sitemap: ${siteChecks.sitemap.error}`,
-    },
+    buildSitemapTest(crawl, crawls, siteChecks, inSitemap),
     {
       id: "image-alt",
       name: "Image Alt Test",
       status: crawl.imagesMissingAlt.length === 0 ? "passed" : "failed",
       level: "page",
       source: "crawl",
-      summary: `${crawl.imagesMissingAlt.length} of ${crawl.images.length} <img> tags on ${crawl.requestedPath} have an empty or missing "alt" attribute (live HTML).`,
+      summary: `${crawl.imagesMissingAlt.length} of ${crawl.images.length} <img> tags on ${crawl.requestedPath} have no "alt" attribute (live HTML; alt="" on decorative images is fine).`,
       evidence: crawl.imagesMissingAlt.slice(0, 10),
       fix: crawl.imagesMissingAlt.length === 0 ? undefined : "Add descriptive alt text to every informative image; keep alt empty only for decorative images.",
     },
@@ -755,6 +911,67 @@ function buildCommonSeoGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin:
     },
   ];
 
+  // Only said when it was measured: an older stored audit never followed links or counted text, so it is not shown as "passed".
+  if (linkStatuses) {
+    const broken = brokenLinksOf(crawl, linkStatuses);
+    const total = broken.internal.length + broken.external.length;
+    tests.push({
+      id: "broken-links",
+      name: "Broken Links Test",
+      status: broken.internal.length > 0 ? "failed" : broken.external.length > 0 ? "warning" : "passed",
+      level: "page",
+      source: "measured",
+      summary:
+        total === 0
+          ? `All ${broken.checked} links checked on this page work (links that timed out or refused the audit's request are not counted as broken).`
+          : `${broken.internal.length} broken link(s) to this site and ${broken.external.length} to other sites, out of ${broken.checked} checked on this page.`,
+      evidence: [...broken.internal, ...broken.external].slice(0, 12).map((l) => `${l.href} → ${l.status}`),
+      fix:
+        total === 0
+          ? undefined
+          : broken.internal.length > 0
+            ? "A link to a page of this site that does not exist: add a 301 redirect from it to the right page (Issues to fix → Broken links), or correct the link."
+            : "A link to another website that does not answer. If it sits in the header or footer it is on every page and is changed once in the website's shared layout; a link written in a page's text is changed in Pages & CMS.",
+      fixKind: broken.internal.length > 0 ? "admin" : "developer",
+      adminIssueType: broken.internal.length > 0 ? "redirect" : undefined,
+    });
+  }
+  if (crawls.length > 1 && crawl.requestedPath !== "/") {
+    const incoming = incomingLinkCount(crawl, crawls);
+    tests.push({
+      id: "incoming-links",
+      name: "Links Pointing to This Page Test",
+      status: incoming >= 2 ? "passed" : "warning",
+      level: "page",
+      source: "crawl",
+      benchmark: "2 or more pages link here",
+      summary:
+        incoming === 0
+          ? `No other audited page links to this page (${crawls.length - 1} checked), so Google can only find it through the sitemap.`
+          : incoming === 1
+            ? "Only one other audited page links to this page, so Google sees it as a minor page."
+            : `${incoming} other audited pages link to this page.`,
+      fix: incoming >= 2 ? undefined : "Link to this page from related pages and blog posts, using descriptive link text.",
+    });
+  }
+  if (typeof crawl.textRatio === "number") {
+    tests.push({
+      id: "text-html-ratio",
+      name: "Text to HTML Ratio Test",
+      status: crawl.textRatio >= 10 ? "passed" : "warning",
+      level: "page",
+      source: "crawl",
+      benchmark: "10% or more",
+      summary: `Visible text is ${crawl.textRatio}% of the page's HTML (${crawl.wordCount} words).${
+        crawl.htmlLength && crawl.inlineScriptBytes ? ` Inline scripts (the website framework's page data and analytics snippets) are ${Math.round((crawl.inlineScriptBytes / crawl.htmlLength) * 100)}% of it.` : ""
+      }`,
+      fix:
+        crawl.textRatio >= 10
+          ? undefined
+          : "Most of the HTML is code, not text. A website developer can shrink it (less inline page data, fewer wrapper elements); adding real copy where a page is thin also helps.",
+    });
+  }
+
   return {
     id: "common-seo-issues",
     name: "Common SEO Issues",
@@ -796,7 +1013,8 @@ function buildSpeedGroup(crawl: CrawlResult, siteChecks: SiteChecks): CheckupGro
       summary: crawl.syncHeadScripts === 0
         ? "No synchronous <script src> tags block parsing in <head>."
         : `${crawl.syncHeadScripts} synchronous script(s) in <head> can block first paint — add defer/async.`,
-      fix: crawl.syncHeadScripts === 0 ? undefined : "Add defer (or async where safe) to head scripts, or move them to the end of body.",
+      evidence: crawl.syncHeadScriptSrcs?.length ? crawl.syncHeadScriptSrcs.slice(0, 10) : undefined,
+      fix: crawl.syncHeadScripts === 0 ? undefined : "Add defer (or async where safe) to the scripts listed, or move them to the end of body. This is a change in the website's code.",
     },
   ];
 
@@ -829,22 +1047,46 @@ function buildSpeedGroup(crawl: CrawlResult, siteChecks: SiteChecks): CheckupGro
   };
 }
 
+function buildCanonicalizationTest(siteChecks: SiteChecks, cleanHost: string): CheckupTest {
+  const c = siteChecks.canonicalization;
+  const apex = `https://${cleanHost}/`;
+  const www = `https://www.${cleanHost}/`;
+  const base = { id: "canonicalization", name: "URL Canonicalization Test", level: "site" as const, source: "measured" as const };
+  if (c.apexStatus !== 200) {
+    return {
+      ...base,
+      status: "failed",
+      summary: `${apex} did not answer with 200 (got ${c.apexStatus ?? "no response"}).`,
+      fix: "Make the main address answer 200.",
+    };
+  }
+  if (c.wwwStatus === null) {
+    return {
+      ...base,
+      status: "failed",
+      summary: `${www} did not answer${c.wwwError ? ` (${c.wwwError === "ENOTFOUND" ? "ENOTFOUND: no DNS record exists for www" : c.wwwError})` : ""}. Anyone who types www in front of the name gets nothing, and Google cannot reach that version. ${apex} answered 200.`,
+      fix: onCloudflare(siteChecks)
+        ? `In Cloudflare: 1) DNS → add a record: type CNAME, name www, target ${cleanHost}, proxy status "Proxied". 2) Rules → Redirect Rules → create a rule: when Hostname equals www.${cleanHost}, redirect to ${apex}{path} (dynamic: concat("https://${cleanHost}", http.request.uri.path)) with status 301. This is a server setting, not something the admin can change.`
+        : `Add a DNS record for www (a CNAME to ${cleanHost}) and redirect ${www} to ${apex} with a 301 at the host or CDN. This is a server setting, not something the admin can change.`,
+    };
+  }
+  if (c.wwwRedirectsToApex) {
+    return { ...base, status: "passed", summary: `${apex} responded 200; ${www} responded ${c.wwwStatus} and redirects to the apex host.` };
+  }
+  return {
+    ...base,
+    status: "warning",
+    summary: `${www} responded ${c.wwwStatus} but does not redirect to ${apex}, so the same site is served on two addresses.`,
+    fix: `Redirect ${www} to ${apex} with a 301 at the host or CDN. This is a server setting, not something the admin can change.`,
+  };
+}
+
 function buildSecurityGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin: string): CheckupGroup {
   const host = new URL(origin).hostname;
+  const cleanHost = host.replace(/^www\./, "");
   const tls = siteChecks.tls;
   const tests: CheckupTest[] = [
-    {
-      id: "canonicalization",
-      name: "URL Canonicalization Test",
-      status:
-        siteChecks.canonicalization.wwwRedirectsToApex ||
-        siteChecks.canonicalization.apexStatus === siteChecks.canonicalization.wwwStatus
-          ? "passed"
-          : "warning",
-      level: "site",
-      source: "measured",
-      summary: `https://${host}/ responded ${siteChecks.canonicalization.apexStatus}; https://www.${host}/ responded ${siteChecks.canonicalization.wwwStatus}${siteChecks.canonicalization.wwwRedirectsToApex ? " and redirects to the apex host" : ""}.`,
-    },
+    buildCanonicalizationTest(siteChecks, cleanHost),
     {
       id: "ssl",
       name: "SSL Checker and HTTPS Test",
@@ -867,6 +1109,7 @@ function buildSecurityGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin: 
         : undefined,
       fix: tls.available ? undefined : "Install/renew a trusted TLS certificate for this host.",
     },
+    ...buildTransportTests(siteChecks, origin),
     {
       id: "mixed-content",
       name: "Mixed Content Test (HTTP over HTTPS)",
@@ -888,6 +1131,55 @@ function buildSecurityGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin: 
     score: groupScore(tests),
     tests,
   };
+}
+
+/** True when the audited site is served through Cloudflare (seen in its response headers) */
+const onCloudflare = (siteChecks: SiteChecks): boolean => (siteChecks.headers?.cdnIndicators ?? []).some((c) => /cloudflare/i.test(c));
+
+/** How the insecure http:// address is handled, and whether browsers are told to stay on https. Only for an https site. */
+function buildTransportTests(siteChecks: SiteChecks, origin: string): CheckupTest[] {
+  if (!origin.startsWith("https://")) return [];
+  const tests: CheckupTest[] = [];
+  const r = siteChecks.httpRedirect;
+  if (r) {
+    const permanent = r.status === 301 || r.status === 308;
+    const sends = r.status !== null && r.status >= 300 && r.status < 400;
+    tests.push({
+      id: "http-redirect",
+      name: "HTTP to HTTPS Redirect Test",
+      status: permanent ? "passed" : "warning",
+      level: "site",
+      source: "measured",
+      summary: permanent
+        ? `http:// is sent to ${r.location ?? "https"} with a permanent redirect (${r.status}).`
+        : sends
+          ? `http:// is sent to ${r.location ?? "https"} with a temporary redirect (${r.status}). Google keeps treating the http address as a separate page.`
+          : r.status === null
+            ? `http:// did not answer (${r.error ?? "no response"}).`
+            : `http:// answered ${r.status} instead of redirecting to https, so the site is reachable on two addresses.`,
+      fix:
+        permanent || r.status === null
+          ? undefined
+          : onCloudflare(siteChecks)
+            ? `Cloudflare's "Always Use HTTPS" answers ${r.status} (temporary). For a permanent one: Cloudflare → Rules → Redirect Rules → create a rule: when "URL Scheme" equals http, redirect to concat("https://", http.host, http.request.uri.path) with status 301 (then "Always Use HTTPS" can stay on). This is a server setting, not something the admin can change.`
+            : "Make the server answer http:// with a 301 (permanent) redirect to the https address, in the host, CDN or proxy. This is a server setting, not something the admin can change.",
+    });
+  }
+  const hsts = siteChecks.headers.hsts;
+  tests.push({
+    id: "hsts",
+    name: "HSTS (Strict-Transport-Security) Test",
+    status: hsts ? "passed" : "warning",
+    level: "site",
+    source: "measured",
+    summary: hsts ? `The site sends Strict-Transport-Security: ${hsts}` : "The site does not send the Strict-Transport-Security header, so browsers are not told to always use https.",
+    fix: hsts
+      ? undefined
+      : onCloudflare(siteChecks)
+        ? "In Cloudflare: SSL/TLS → Edge Certificates → HTTP Strict Transport Security (HSTS) → Enable HSTS, with a max age of 12 months (31536000 seconds). Turn it on only when every address of the site works over https. This is a server setting, not something the admin can change."
+        : "Send the header Strict-Transport-Security: max-age=31536000; includeSubDomains from the server, CDN or proxy. This is a server setting, not something the admin can change.",
+  });
+  return tests;
 }
 
 function buildMobileGroup(crawl: CrawlResult): CheckupGroup {
@@ -939,7 +1231,7 @@ function buildAdvancedGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin: 
       summary: crawl.jsonLdBlocks > 0
         ? `Found ${crawl.jsonLdBlocks} JSON-LD block(s) in the live HTML with types: ${crawl.jsonLdTypes.join(", ") || "(no @type found)"}${crawl.jsonLdValid ? "" : ` — JSON parse error: ${crawl.jsonLdError}`}.`
         : "No JSON-LD structured data found in the live HTML.",
-      fix: crawl.jsonLdBlocks > 0 && crawl.jsonLdValid ? undefined : "Add valid JSON-LD (Event, Organization, WebSite) to this route.",
+      fix: crawl.jsonLdBlocks > 0 && crawl.jsonLdValid ? undefined : "Add valid JSON-LD (Organization, WebSite and a type that fits this page) to this route.",
     },
     {
       id: "noindex",
@@ -958,8 +1250,17 @@ function buildAdvancedGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin: 
       level: "page",
       source: "crawl",
       summary: crawl.canonical
-        ? `Canonical link served: ${crawl.canonical} (${crawl.canonicalStatus}).`
+        ? crawl.canonicalStatus === "self"
+          ? `Canonical link served: ${crawl.canonical} (this page itself).`
+          : `Canonical link served: ${crawl.canonical}, which is not this page's own address (${crawl.url}). Google may show that address instead of this page.`
         : "No canonical link tag in the live HTML.",
+      fix:
+        crawl.canonicalStatus === "self"
+          ? undefined
+          : crawl.canonical
+            ? `Set this page's canonical URL to its own address in Pages & CMS → SEO (or clear the field so the page uses its own address). If the site was audited on a different address than the one it is published on (a test or local copy), this is expected there and passes on the live site.`
+            : "Add a canonical URL for this page (Issues to fix → Main address, or Pages & CMS → SEO).",
+      ...(crawl.canonicalStatus === "self" ? {} : { fixKind: "admin" as const, adminIssueType: "canonical" as const }),
     },
     {
       id: "disallow",
@@ -997,7 +1298,7 @@ function buildAdvancedGroup(crawl: CrawlResult, siteChecks: SiteChecks, origin: 
 
 /** Assembles the complete real checkup report for one route. */
 export function buildSeoCheckupReport(input: ReportBuilderInput): SeoCheckupReportData {
-  const { origin, crawls, siteChecks, pageSpeed, gsc, llm } = input;
+  const { origin, crawls, siteChecks, gsc, llm } = input;
   const crawl =
     crawls.find((c) => c.requestedPath === input.reportRoute) ||
     crawls.find((c) => c.requestedPath === "/") ||
@@ -1006,15 +1307,34 @@ export function buildSeoCheckupReport(input: ReportBuilderInput): SeoCheckupRepo
     throw new Error("buildSeoCheckupReport requires at least one crawled route");
   }
 
+  // PageSpeed is a measurement of ONE address. A run made for another page (the audit measures the home page) is never
+  // shown as this page's score, and nothing is derived from it: a page is "not measured" until it is measured.
+  const samePage = (ps: PageSpeedSnapshot | null | undefined): PageSpeedSnapshot | null => {
+    if (!ps) return null;
+    try {
+      const norm = (u: string) => `${new URL(u).host}${new URL(u).pathname.replace(/\/+$/, "")}`;
+      return norm(ps.url) === norm(crawl.url) ? ps : null;
+    } catch {
+      return null;
+    }
+  };
+  const pageSpeed = samePage(input.pageSpeed);
+  const pageSpeedDesktop = samePage(input.pageSpeedDesktop);
+
   const routeSummaries = buildRouteSummaries(crawls, gsc);
   const groups: CheckupGroup[] = [
-    buildCommonSeoGroup(crawl, siteChecks, origin),
+    buildCommonSeoGroup(crawl, siteChecks, origin, input.linkStatuses, crawls),
     buildFreshnessGroup(crawls, siteChecks),
     buildSpeedGroup(crawl, siteChecks),
     buildSecurityGroup(crawl, siteChecks, origin),
     buildMobileGroup(crawl),
     buildAdvancedGroup(crawl, siteChecks, origin),
   ];
+  // The wider site-audit checks (crawlability, links and redirects, content, resources, security, hreflang / AMP).
+  const auditCtx = buildAuditContext({ origin, crawls, siteChecks, linkStatuses: input.linkStatuses });
+  for (const g of buildAuditGroups(crawl, auditCtx)) {
+    groups.push({ id: `audit-${g.key}`, name: g.name, note: g.note, score: groupScore(g.tests), tests: g.tests });
+  }
   if (pageSpeed) {
     groups.unshift(buildPageSpeedGroup(pageSpeed));
   }
@@ -1032,7 +1352,7 @@ export function buildSeoCheckupReport(input: ReportBuilderInput): SeoCheckupRepo
   );
 
   const seoScore = totals.total
-    ? clamp(Math.round(((totals.passed + totals.warnings * 0.5) / totals.total) * 100), 0, 99)
+    ? clamp(Math.round(((totals.passed + totals.warnings * 0.5) / totals.total) * 100), 0, 100)
     : 0;
 
   const testedLlm = llm.filter((p) => p.tested && p.results.length > 0);
@@ -1061,6 +1381,7 @@ export function buildSeoCheckupReport(input: ReportBuilderInput): SeoCheckupRepo
   const issues: CheckupIssue[] = [];
   for (const group of groups) {
     for (const test of group.tests) {
+      const how = test.fixKind ? { fixKind: test.fixKind, adminIssueType: test.adminIssueType } : fixKindOf(test.id, group.id);
       if (test.status === "failed") {
         issues.push({
           priority: "HIGH",
@@ -1071,6 +1392,8 @@ export function buildSeoCheckupReport(input: ReportBuilderInput): SeoCheckupRepo
           route: crawl.requestedPath,
           group: group.name,
           evidence: test.evidence,
+          testId: test.id,
+          ...how,
           collapsible: true,
         });
       } else if (test.status === "warning") {
@@ -1083,6 +1406,8 @@ export function buildSeoCheckupReport(input: ReportBuilderInput): SeoCheckupRepo
           route: crawl.requestedPath,
           group: group.name,
           evidence: test.evidence,
+          testId: test.id,
+          ...how,
           collapsible: true,
         });
       }
@@ -1091,7 +1416,18 @@ export function buildSeoCheckupReport(input: ReportBuilderInput): SeoCheckupRepo
   const priorityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 } as const;
   issues.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
 
+  // An audit stored before links, text ratio and the http redirect were measured cannot show those checks. Say so
+  // instead of leaving them out silently.
+  const missingChecks: string[] = [];
+  if (!input.linkStatuses) missingChecks.push("broken links, images and resources");
+  if (typeof crawl.textRatio !== "number") missingChecks.push("text-to-HTML ratio");
+  if (crawl.hasDoctype === undefined) missingChecks.push("redirects, doctype, compression, duplicate content and the other newer page checks");
+  if (origin.startsWith("https://") && !siteChecks.httpRedirect) missingChecks.push("http to https redirect");
+  if (!siteChecks.llmsTxt) missingChecks.push("llms.txt, TLS version and robots/sitemap format");
   const inputs: ReportInput[] = [
+    ...(missingChecks.length > 0
+      ? [{ label: "Audit data is out of date", value: `This stored audit has no ${missingChecks.join(", ")} data. Click "Re-Audit Page" to measure them.`, source: "derived" as const, status: "warning" as const }]
+      : []),
     { label: "Overall On-Page SEO Score", value: `${seoScore} / 100 (Target: 85+)`, source: "derived" },
     { label: "SEO Issues Detected", value: `${totals.failed + totals.warnings} issues (${totals.failed} failed, ${totals.warnings} warnings)`, source: "derived", status: totals.failed > 0 ? "failed" : totals.warnings > 0 ? "warning" : "passed" },
     { label: "Page Title Length", value: `${crawl.titleLength} chars`, source: "crawl" },
@@ -1102,7 +1438,16 @@ export function buildSeoCheckupReport(input: ReportBuilderInput): SeoCheckupRepo
     { label: "Total Download Time", value: `${round(crawl.totalMs / 1000, 2)}s`, source: "measured" },
     { label: "HTML Document Size", value: `${round(crawl.uncompressedBytes / 1024, 1)} KB`, source: "measured" },
     { label: "DOM Nodes", value: `${crawl.domNodes} nodes`, source: "measured" },
-    { label: "Images on Page", value: `${crawl.images.length} images, ${crawl.imagesMissingAlt.length} missing alt`, source: "crawl" },
+    {
+      label: "Images on Page",
+      value: (() => {
+        // decorative images (hidden from screen readers) are meant to have an empty alt: they are not counted as weak
+        const weak = crawl.images.filter((i) => !i.isDecorative && i.src && isGenericAlt(i.alt)).length;
+        const decorative = crawl.images.filter((i) => i.isDecorative).length;
+        return `${crawl.images.length} images · ${crawl.imagesMissingAlt.length} without an alt attribute · ${weak} with empty or generic alt${decorative ? ` · ${decorative} decorative (correctly empty)` : ""}`;
+      })(),
+      source: "crawl",
+    },
     {
       label: "Google Search Clicks",
       value: gsc.available && gsc.totals ? `${gsc.totals.clicks} clicks (${gsc.rangeStart} → ${gsc.rangeEnd})` : "Search Console not connected",
@@ -1146,10 +1491,12 @@ export function buildSeoCheckupReport(input: ReportBuilderInput): SeoCheckupRepo
     summary,
     categories,
     inputs,
+    checklist: buildChecklist({ crawl, origin, crawls, siteChecks, linkStatuses: input.linkStatuses, pageSpeed }),
     issues,
     groups,
     generatedAt: new Date().toISOString(),
     pageSpeed: pageSpeed ?? null,
+    pageSpeedDesktop: pageSpeedDesktop && pageSpeedDesktop.ok ? pageSpeedDesktop : null,
     routeSummaries,
     site: {
       origin,

@@ -14,12 +14,13 @@
  *        GSC_SERVICE_ACCOUNT_JSON  JSON string, base64 JSON, or a file path
  *        or GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
  *
- *   GSC_SITE_URL              property to query, e.g. "https://bharatorganicexpo.com"
+ *   GSC_SITE_URL              property to query, e.g. "https://example.com" (defaults to the audited site)
  *
  * When the credentials are absent the service honestly reports
  * `available: false` — it never substitutes placeholder metrics.
  */
 
+import { getSiteOrigin } from "../../config/seoSite";
 import * as crypto from "crypto";
 import * as fs from "fs";
 
@@ -201,7 +202,7 @@ export async function fetchSearchAnalytics(days = 28, dimension: "page" | "query
   const siteUrl =
     process.env.GSC_SITE_URL ||
     process.env.SEARCH_CONSOLE_SITE_URL ||
-    "https://bharatorganicexpo.com";
+    getSiteOrigin();
   try {
     const token = await resolveAccessToken();
     const end = new Date();

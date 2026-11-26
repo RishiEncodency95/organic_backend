@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import SeoAuditSnapshot from "../../models/seoAudit.model";
 import { crawlRoutes } from "./crawler.service";
+import { checkLinks, linkStatusesFromList, linkStatusesToList } from "./linkCheck.service";
+import { checkExternalRobots } from "./siteChecks.service";
 import { runSiteChecks } from "./siteChecks.service";
 import { runPageSpeed } from "./psi.service";
 import { fetchSearchAnalytics, GscResult, isSearchConsoleConfigured } from "./gsc.service";
@@ -9,8 +11,16 @@ import { buildSeoCheckupReport } from "./reportBuilder.service";
 import type { SeoCheckupReportData, RouteSummary, PageSpeedSnapshot, LlmPlatformResult } from "./types";
 import type { CrawlResult } from "./crawler.service";
 import type { SiteChecks } from "./siteChecks.service";
+import { buildPageDetail, buildPageRows, type AuditSnapshot } from "./pageRows.service";
+import { getSiteHost, getSiteId, getSiteName, getSiteOrigin, isAuditedOrigin, toOrigin } from "../../config/seoSite";
+import { seoAutoFixService, isSafeRedirectTarget, StaleRollbackError } from "./seoAutoFix.service";
+import { autoFixSchema, rollbackSchema, redirectSchema, contentAnalyzeSchema, humanizeSchema, scheduleSchema, parseOr400, pageParam } from "./seoAudit.schemas";
+import { seoExcelExportService } from "./seoExcelExport.service";
+import { seoAiContentService } from "./seoAiContent.service";
+import { seoAuditQueueService, acquireAuditLock, releaseAuditLock, forceUnlockAudit } from "./seoAuditQueue.service";
+import Redirect from "../../models/Redirect.model";
+import SeoFixLog from "../../models/seoFixLog.model";
 
-const DEFAULT_ORIGIN = process.env.SEO_AUDIT_ORIGIN || "https://bharatorganicexpo.com";
 
 type ReportPageSpeed = PageSpeedSnapshot | null;
 type GscResultLike = GscResult;
@@ -34,7 +44,37 @@ function routeIdToPath(route: string): string {
   if (!cleaned || cleaned === "home" || cleaned === "index") return "/";
   return `/${cleaned}`;
 }
-const MAX_ROUTES = 30;
+const MAX_ROUTES = 60;
+/**
+ * Internal page addresses linked from the crawled pages that are not already in the list (query and #hash dropped;
+ * addresses that end in a file extension such as .pdf or .jpg are files, not pages).
+ */
+export function discoverLinkedPaths(origin: string, crawls: CrawlResult[], known: Set<string>): string[] {
+  const bare = (h: string) => h.toLowerCase().replace(/^www\./, "");
+  let host = "";
+  try {
+    host = bare(new URL(origin).hostname);
+  } catch {
+    return [];
+  }
+  const found = new Set<string>();
+  for (const crawl of crawls) {
+    for (const link of crawl.links ?? []) {
+      if (!link.isInternal) continue;
+      try {
+        const u = new URL(link.href, crawl.url);
+        if (bare(u.hostname) !== host) continue;
+        const path = u.pathname.replace(/\/+$/, "") || "/";
+        if (/\.[a-z0-9]{2,5}$/i.test(path) || known.has(path)) continue;
+        found.add(path);
+      } catch {
+        /* not a usable address */
+      }
+    }
+  }
+  return Array.from(found);
+}
+
 
 // The route list comes from a live sitemap fetch (~5s against the production
 // site). Cache it briefly so the admin route picker opens instantly on repeat
@@ -50,14 +90,20 @@ interface SnapshotDoc {
   durationMs?: number;
 }
 
-function originFrom(value?: string): string {
-  if (!value) return DEFAULT_ORIGIN;
-  try {
-    const url = new URL(value);
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return DEFAULT_ORIGIN;
-  }
+/**
+ * The site to audit. A caller may name it, but only if it is the configured site (with or without
+ * "www"): otherwise anyone who can reach this endpoint could make the server fetch any address.
+ * Returns null, after sending a 400, when a different site was asked for.
+ */
+function resolveOrigin(value: unknown, res: Response): string | null {
+  if (typeof value !== "string" || !value.trim()) return getSiteOrigin();
+  const origin = toOrigin(value);
+  if (origin && isAuditedOrigin(origin)) return origin;
+  res.status(400).json({
+    success: false,
+    message: `Only ${getSiteOrigin()} can be audited. Change SEO_AUDIT_ORIGIN to audit another site.`,
+  });
+  return null;
 }
 
 function pathFromUrl(loc: string, origin: string): string | null {
@@ -85,7 +131,48 @@ async function snapshotByRoute(route: string): Promise<SnapshotDoc | null> {
   return latestSnapshot();
 }
 
+// One audit at a time (Redis lock across processes + in-process flag): see seoAuditQueue.service
+
+/** Which report check an admin fix of each kind settles (the report only sees it after the next audit) */
+const TESTS_OF_FIX: Record<string, string[]> = {
+  // only the check a fix settles by itself; a check that can still fail for another reason is not claimed
+  title: ["meta-title"],
+  description: ["meta-description"],
+  og: ["social-meta"],
+  h1: ["heading-tags"],
+  image_alt: ["image-alt"],
+  schema: ["structured-data"],
+  canonical: ["canonical"],
+};
+
+/**
+ * The report is built from the audit's crawl, so a fix made after the audit is not in it yet. Every issue that a later,
+ * still-applied fix addresses is marked, so the report can say "fixed, confirmed by the next audit" instead of showing
+ * a problem that was already dealt with as if nobody had touched it.
+ */
+async function markFixedAfterAudit(report: SeoCheckupReportData, auditedAt: Date | string | undefined): Promise<void> {
+  if (!auditedAt || !report.issues?.length) return;
+  const logs: any[] = await SeoFixLog.find({ status: "applied", reverted: false, createdAt: { $gt: new Date(auditedAt) } })
+    .select("route issueType createdAt fixedBy")
+    .lean();
+  if (!logs.length) return;
+  for (const issue of report.issues) {
+    if (!issue.testId) continue;
+    const hit = logs.find((l) => (l.route || "/") === (issue.route || "/") && (TESTS_OF_FIX[l.issueType] ?? []).includes(issue.testId as string));
+    if (hit) issue.fixedAfterAudit = { at: new Date(hit.createdAt).toISOString(), by: hit.fixedBy };
+  }
+}
+
 export const seoAuditController = {
+  async unlockAudit(_req: Request, res: Response) {
+    try {
+      await forceUnlockAudit();
+      return res.status(200).json({ success: true, message: "Audit lock cleared successfully." });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err?.message || "Failed to clear lock" });
+    }
+  },
+
   /**
    * POST /api/seo-audit/run
    * Executes a full REAL audit: sitemap discovery, live crawl, TLS/DNS/header
@@ -93,12 +180,20 @@ export const seoAuditController = {
    * probes. Persists the snapshot and returns the assembled report.
    */
   async runAudit(req: Request, res: Response) {
+    const force = Boolean(req.body?.force);
+    const lockToken = await acquireAuditLock(force);
+    if (!lockToken) {
+      return res.status(409).json({ success: false, message: "An audit is already running. Wait for it to finish, then run again." });
+    }
     const startedAt = Date.now();
     try {
-      const origin = originFrom(req.body.origin || req.query.origin as string | undefined);
-      const reportRoute = (req.body.route as string | undefined) || "/";
-      const withPageSpeed = req.body.pageSpeed !== false;
-      const withLlm = req.body.llm !== false;
+      const origin = resolveOrigin(req.body?.origin ?? req.query.origin, res);
+      if (!origin) return;
+      const requestedRoute = typeof req.body?.route === "string" ? req.body.route.trim() : "";
+      // A route is a path on the site ("/about"), never a URL.
+      const reportRoute = /^\/(?!\/)/.test(requestedRoute) ? requestedRoute : "/";
+      const withPageSpeed = req.body?.pageSpeed !== false;
+      const withLlm = req.body?.llm !== false;
 
       // 1. Discover the real route inventory from the live robots.txt + sitemap.
       // Wrapped individually so one failing probe never crashes the whole audit.
@@ -133,7 +228,32 @@ export const seoAuditController = {
       }
 
       // 2. Live-crawl every route.
-      const crawls = await crawlRoutes(origin, paths, { concurrency: 2, delayMs: 200 });
+      let crawls = await crawlRoutes(origin, paths, { concurrency: 2, delayMs: 200 });
+
+      // 2a. Pages that exist but are missing from the sitemap are found through the links of the pages just crawled.
+      const discovered = discoverLinkedPaths(origin, crawls, new Set(paths)).slice(0, Math.max(0, MAX_ROUTES - paths.length));
+      if (discovered.length > 0) {
+        crawls = [...crawls, ...(await crawlRoutes(origin, discovered, { concurrency: 2, delayMs: 200 }))];
+      }
+
+      // The audit records what the live pages really serve. What the admin saved but the website does not show yet is not
+      // mixed in here: the Issues list shows it separately as "saved, waiting for website".
+
+      // 2b. Follow every link found on those pages and see whether it still works.
+      const linkStatuses = await checkLinks(crawls).catch(() => null);
+
+      // 2c. robots.txt of other sites that serve files to these pages.
+      const ownHost = new URL(origin).hostname.replace(/^www\./, "");
+      const externalHosts = new Set<string>();
+      for (const c of crawls) {
+        for (const u of [...(c.stylesheets ?? []), ...(c.scripts ?? []), ...(c.images ?? []).map((i) => i.src ?? "")]) {
+          try {
+            const h = new URL(u, c.url).hostname;
+            if (/^https?:/.test(new URL(u, c.url).protocol) && h.replace(/^www\./, "") !== ownHost) externalHosts.add(h);
+          } catch { /* not a usable address */ }
+        }
+      }
+      bootstrap.externalRobots = await checkExternalRobots(Array.from(externalHosts)).catch(() => undefined);
 
       // 3. Live auxiliary data sources.
       const reportCrawl =
@@ -141,8 +261,9 @@ export const seoAuditController = {
         crawls.find((c) => c.requestedPath === "/") ||
         crawls[0];
       const pageUrl = reportCrawl?.url || `${origin}/`;
-      const [pageSpeed, gsc, llm] = await Promise.all([
+      const [pageSpeedMobile, pageSpeedDesktop, gsc, llm] = await Promise.all([
         withPageSpeed ? runPageSpeed(pageUrl, "mobile") : Promise.resolve(null),
+        withPageSpeed ? runPageSpeed(pageUrl, "desktop") : Promise.resolve(null),
         fetchSearchAnalytics(28),
         withLlm ? runLlmVisibility() : Promise.resolve([]),
       ]);
@@ -153,9 +274,11 @@ export const seoAuditController = {
         reportRoute: reportCrawl?.requestedPath || "/",
         crawls,
         siteChecks: bootstrap,
-        pageSpeed,
+        pageSpeed: pageSpeedMobile,
+        pageSpeedDesktop,
         gsc,
         llm,
+        linkStatuses,
       });
 
       await SeoAuditSnapshot.create({
@@ -164,9 +287,11 @@ export const seoAuditController = {
         report,
         crawls,
         siteChecks: bootstrap,
+        linkChecks: linkStatusesToList(linkStatuses),
         gsc,
         llm,
-        pageSpeed,
+        pageSpeed: pageSpeedMobile,
+        pageSpeedDesktop,
         durationMs: Date.now() - startedAt,
       });
       // Keep the last 10 snapshots so history stays small.
@@ -185,6 +310,8 @@ export const seoAuditController = {
         success: false,
         message: error?.message || "Real SEO audit failed",
       });
+    } finally {
+      await releaseAuditLock(lockToken);
     }
   },
 
@@ -206,20 +333,36 @@ export const seoAuditController = {
       let report = snapshot.report as SeoCheckupReportData;
       const wanted = route ? routeIdToPath(route) : null;
       if (wanted && report.routeSummaries?.some((s) => s.path === wanted)) {
-        const crawls = (snapshot.crawls || []) as CrawlResult[];
+        let crawls = (snapshot.crawls || []) as CrawlResult[];
         const siteChecks = (snapshot.siteChecks || null) as SiteChecks | null;
         if (crawls.length && siteChecks) {
+          const origin = report.site?.origin || getSiteOrigin();
+          const targetUrl = wanted === "/" ? `${origin}/` : `${origin}${wanted}`;
+          const pageSpeedMobile = ((snapshot as any).pageSpeed as ReportPageSpeed) ?? null;
+          const pageSpeedDesktop = ((snapshot as any).pageSpeedDesktop as ReportPageSpeed) ?? null;
+
           report = buildSeoCheckupReport({
-            origin: report.site?.origin || DEFAULT_ORIGIN,
+            origin,
             reportRoute: wanted,
             crawls,
             siteChecks,
-            pageSpeed: ((snapshot as any).pageSpeed as ReportPageSpeed) ?? null,
+            pageSpeed: pageSpeedMobile,
+            pageSpeedDesktop,
             gsc: ((snapshot as any).gsc as GscResultLike) ?? notConnectedGsc(),
             llm: (((snapshot as any).llm || []) as LlmLike[]) ?? [],
+            linkStatuses: linkStatusesFromList((snapshot as any).linkChecks),
           });
         }
+      } else {
+        if (!report.pageSpeedDesktop) {
+          report.pageSpeedDesktop = ((snapshot as any).pageSpeedDesktop as ReportPageSpeed) ?? null;
+        }
+        if (!report.pageSpeed) {
+          report.pageSpeed = ((snapshot as any).pageSpeed as ReportPageSpeed) ?? null;
+        }
       }
+
+      await markFixedAfterAudit(report, (snapshot as any).createdAt);
 
       return res.status(200).json({
         success: true,
@@ -228,6 +371,7 @@ export const seoAuditController = {
           generatedAt: report.generatedAt,
           durationMs: snapshot.durationMs ?? null,
           routesCrawled: snapshot.crawls?.length ?? 0,
+          auditedAt: (snapshot as any).createdAt ?? null,
         },
       });
     } catch (error: any) {
@@ -238,7 +382,8 @@ export const seoAuditController = {
   /** GET /api/seo-audit/routes — real sitemap-derived route list. */
   async getRoutes(req: Request, res: Response) {
     try {
-      const origin = originFrom(req.query.origin as string | undefined);
+      const origin = resolveOrigin(req.query.origin, res);
+      if (!origin) return;
       const cached = routeListCache.get(origin);
       if (cached && Date.now() - cached.at < ROUTE_LIST_TTL_MS) {
         return res.status(200).json(cached.payload);
@@ -270,8 +415,8 @@ export const seoAuditController = {
     }
   },
 
-  /** GET /api/seo-audit/pages — real per-route rows from the latest audit. */
-  async getPages(req: Request, res: Response) {
+  /** GET /api/seo-audit/pages — one row per crawled route, read off the latest audit's crawl. */
+  async getPages(_req: Request, res: Response) {
     try {
       const snapshot = await latestSnapshot();
       if (!snapshot?.report) {
@@ -281,7 +426,7 @@ export const seoAuditController = {
           meta: { page: 1, limit: 0, total: 0, totalPages: 0 },
         });
       }
-      const pages = (snapshot.report.routeSummaries || []).map((s) => summaryToPageRow(s));
+      const pages = buildPageRows(snapshot as unknown as AuditSnapshot);
       return res.status(200).json({
         pages,
         message: null,
@@ -296,132 +441,39 @@ export const seoAuditController = {
     }
   },
 
-  /** GET /api/seo-audit/pages/:id — deep real detail for one route. */
+  /** GET /api/seo-audit/pages/:id — the full detail of one route. */
   async getPageDetail(req: Request, res: Response) {
     try {
       const rawId = req.params.id || "home";
       const id = (Array.isArray(rawId) ? rawId[0] : rawId).toLowerCase().trim();
       const snapshot = await latestSnapshot();
       if (!snapshot?.report) {
-        return res.status(404).json({
-          success: false,
-          message: "No real audit data yet — run an audit first.",
-          data: null,
-        });
+        return res.status(404).json({ success: false, message: "No real audit data yet — run an audit first.", data: null });
       }
-      const summary =
-        (snapshot.report.routeSummaries || []).find((s) => s.id === id) ||
-        (snapshot.report.routeSummaries || []).find((s) => s.path.replace(/^\//, "") === id);
-      const crawl = (snapshot.crawls || []).find(
-        (c) => c.requestedPath === (summary?.path ?? (id === "home" ? "/" : `/${id}`)),
-      );
-      if (!summary) {
+      const detail = await buildPageDetail(snapshot as unknown as AuditSnapshot, id);
+      if (!detail) {
         return res.status(404).json({ success: false, message: `Route "${id}" was not part of the latest audit.`, data: null });
       }
-      const page = summaryToPageRow(summary);
-      return res.status(200).json({
-        success: true,
-        data: {
-          page: {
-            ...page,
-            metaRobots: crawl?.robotsMeta ?? null,
-            canonicalNormalized: summary.canonical,
-            canonicalCount: crawl?.canonicalCount ?? 0,
-            ogTitle: crawl?.openGraph?.["og:title"] ?? null,
-            ogDescription: crawl?.openGraph?.["og:description"] ?? null,
-            ogImage: crawl?.openGraph?.["og:image"] ?? null,
-            ogType: crawl?.openGraph?.["og:type"] ?? null,
-            ogUrl: crawl?.openGraph?.["og:url"] ?? null,
-            twitterCard: crawl?.twitter?.["twitter:card"] ?? null,
-            twitterTitle: crawl?.twitter?.["twitter:title"] ?? null,
-            twitterDescription: crawl?.twitter?.["twitter:description"] ?? null,
-            twitterImage: crawl?.twitter?.["twitter:image"] ?? null,
-            metaKeywords: crawl?.metaKeywords ?? null,
-            metaKeywordCount: crawl?.metaKeywords ? crawl.metaKeywords.split(",").length : 0,
-            socialStatus: {
-              openGraph: crawl?.openGraph?.["og:title"] ? "valid" : "not_available",
-              twitter: crawl?.twitter?.["twitter:card"] ? "valid" : "not_available",
-            },
-            lang: crawl?.htmlLang ?? null,
-            viewport: crawl?.viewport ?? null,
-            hreflang: crawl?.hreflang ?? [],
-            headingSequence: crawl?.headingSequence ?? [],
-            headingIssues: [
-              ...(summary.h1Count === 0 ? ["No H1 on page"] : []),
-              ...(summary.h1Count > 1 ? [`${summary.h1Count} H1 tags on page`] : []),
-            ],
-            h2: crawl?.h2 ?? [],
-            h3: crawl?.h3 ?? [],
-            images: crawl?.images ?? [],
-            links: crawl?.links ?? [],
-            outgoing: [],
-            brokenOutgoing: 0,
-            redirectingOutgoing: 0,
-            browserHealth: { consoleErrors: [], consoleWarnings: [], jsExceptions: [], failedRequests: [] },
-            cdn: {
-              status: "detected",
-              provider: null,
-              evidence: [],
-              cacheControl: null,
-              server: null,
-            },
-            keywordAnalysis: { available: false, targets: [] },
-          },
-          redirectChain: null,
-          performance: {
-            audits: snapshot.report.pageSpeed
-              ? [
-                  {
-                    id: `lighthouse-${snapshot.report.pageSpeed.strategy}`,
-                    strategy: snapshot.report.pageSpeed.strategy,
-                    status: snapshot.report.pageSpeed.ok ? "completed" : "failed",
-                    error: snapshot.report.pageSpeed.message ?? null,
-                    lighthouseVersion: null,
-                    lab: {
-                      performance: snapshot.report.pageSpeed.scores.performance,
-                      accessibility: snapshot.report.pageSpeed.scores.accessibility,
-                      bestPractices: snapshot.report.pageSpeed.scores.bestPractices,
-                      seo: snapshot.report.pageSpeed.scores.seo,
-                      fcpMs: snapshot.report.pageSpeed.metrics.fcpMs,
-                      lcpMs: snapshot.report.pageSpeed.metrics.lcpMs,
-                      tbtMs: snapshot.report.pageSpeed.metrics.tbtMs,
-                      cls: snapshot.report.pageSpeed.metrics.cls,
-                      siMs: snapshot.report.pageSpeed.metrics.siMs,
-                    },
-                    field: { available: snapshot.report.pageSpeed.fieldData.available, source: "chrome-ux-report" },
-                    opportunities: [],
-                    renderBlockingResources: [],
-                    fetchedAt: snapshot.report.pageSpeed.fetchedAt,
-                  },
-                ]
-              : [],
-            labNote: snapshot.report.pageSpeed?.ok
-              ? "From the live Google PageSpeed Insights run attached to the latest audit."
-              : "No PageSpeed Insights run is attached to the latest audit.",
-            fieldNote: "Chrome UX Report availability is reported per run by Google.",
-          },
-          search: {
-            available: summary.searchConsole.available,
-            rangeStart: null,
-            rangeEnd: null,
-            metric: "clicks/impressions",
-            totals: summary.searchConsole.available
-              ? {
-                  clicks: summary.searchConsole.clicks ?? 0,
-                  impressions: summary.searchConsole.impressions ?? 0,
-                  ctr: summary.searchConsole.ctr ?? 0,
-                  position: summary.searchConsole.position ?? 0,
-                }
-              : null,
-            topQueries: [],
-          },
-          history: [],
-          recommendation: null,
-        },
-      });
+      return res.status(200).json({ success: true, data: detail });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: error?.message || "Failed to load page detail", data: null });
     }
+  },
+
+  /**
+   * GET /api/seo-audit/pagespeed?url=&strategy=mobile|desktop&refresh=1
+   * A live Google PageSpeed Insights (Lighthouse) run for one page of the audited site, cached for
+   * 6 hours. Only pages of the configured site are accepted: this spends the PageSpeed quota.
+   */
+  async getPageSpeed(req: Request, res: Response) {
+    const url = String(req.query.url ?? "");
+    if (!/^https?:\/\//i.test(url) || !isAuditedOrigin(url)) {
+      return res.status(400).json({ success: false, message: `Enter a valid URL on ${getSiteHost()}` });
+    }
+    const strategy = req.query.strategy === "desktop" ? "desktop" : "mobile";
+    const snapshot = await runPageSpeed(url, strategy, req.query.refresh === "1");
+    // 200 even when Google could not be reached: `ok` and `message` in the result say what happened.
+    return res.status(200).json({ success: true, data: snapshot });
   },
 
   /** GET /api/seo-audit/overview — real site-level scores from the latest audit. */
@@ -448,9 +500,9 @@ export const seoAuditController = {
         hasData: true,
         data: {
           site: {
-            id: "bharat-organic-expo",
+            id: getSiteId(),
             url: report.site.origin,
-            label: "Bharat Organic Expo 2027",
+            label: getSiteName(),
             type: "production",
             lastCrawlAt: report.generatedAt,
             lastScore: report.seoScore,
@@ -503,76 +555,154 @@ export const seoAuditController = {
       return res.status(500).json({ success: false, message: error?.message || "Failed to build overview" });
     }
   },
-};
 
-/** Maps a real RouteSummary onto the SeoPageRow contract used by the UI. */
-function summaryToPageRow(s: RouteSummary) {
-  const tLength = s.titleLength;
-  const dLength = s.metaDescriptionLength;
-  const issues =
-    (tLength < 20 || tLength > 60 ? 1 : 0) +
-    (dLength === 0 || dLength < 120 || dLength > 220 ? 1 : 0) +
-    (s.h1Count !== 1 ? 1 : 0) +
-    (s.imagesMissingAlt > 0 ? 1 : 0) +
-    (s.canonicalStatus !== "self" ? 1 : 0);
-  return {
-    id: s.id,
-    url: s.url,
-    path: s.path,
-    title: s.title,
-    titleLength: tLength,
-    titleStatus: !s.title ? "missing" : tLength < 20 ? "too_short" : tLength > 60 ? "too_long" : "ok",
-    metaDescription: s.metaDescription,
-    metaDescriptionLength: dLength,
-    descriptionStatus: !s.metaDescription ? "missing" : dLength < 120 ? "too_short" : dLength > 220 ? "too_long" : "ok",
-    httpStatus: s.httpStatus,
-    indexable: s.indexable,
-    indexabilityReason: s.indexable ? null : "noindex directive or crawl failure",
-    canonical: s.canonical,
-    canonicalStatus: s.canonicalStatus,
-    score: s.score,
-    issueCounts: { critical: 0, warning: issues > 1 ? 1 : 0, notice: issues, total: issues },
-    issueCategories: ["On-page", "Metadata"],
-    h1: [],
-    h1Status: s.h1Count === 0 ? "missing" : s.h1Count > 1 ? "multiple" : "ok",
-    hierarchyStatus: s.h1Count === 1 ? "ok" : "hierarchy_error",
-    headingCounts: { h1: s.h1Count, h2: s.h2Count, h3: 0 },
-    wordCount: s.words,
-    inLinks: s.internalLinks,
-    outLinks: s.externalLinks,
-    brokenLinks: 0,
-    depth: s.path === "/" ? 0 : s.path.split("/").filter(Boolean).length,
-    isOrphan: s.internalLinks === 0,
-    inSitemap: true,
-    schemaTypes: [],
-    schemaStatus: "valid",
-    imageCount: s.imageCount,
-    imagesMissingAlt: s.imagesMissingAlt,
-    responseTimeMs: s.ttfbMs,
-    keywordStatus: "ok",
-    openGraphStatus: "not_available",
-    twitterStatus: "not_available",
-    consoleErrorCount: 0,
-    failedRequestCount: 0,
-    renderBlockingCount: 0,
-    cdnStatus: "unable_to_determine",
-    performance: {
-      score: null,
-      lcpMs: null,
-      cls: null,
-      isFieldData: false,
-      fetchedAt: null,
-    },
-    search: s.searchConsole.available
-      ? {
-          clicks: s.searchConsole.clicks ?? 0,
-          impressions: s.searchConsole.impressions ?? 0,
-          ctr: s.searchConsole.ctr ?? 0,
-          position: s.searchConsole.position ?? 0,
-          updatedAt: null,
-        }
-      : null,
-    analytics: null,
-    lastCrawledAt: new Date().toISOString(),
-  };
-}
+  /** POST /api/seo-audit/auto-fix — 1-click self-healing for single issue or full page */
+  async autoFix(req: Request, res: Response) {
+    const body = parseOr400(autoFixSchema, req.body, res);
+    if (!body) return;
+    try {
+      const user = (req as any).user?.email || (req as any).user?.name || "Admin User";
+      const result = await seoAutoFixService.autoFixPage(body.pageUrl, body.route, body.issueType, body.options, user, { dryRun: body.dryRun });
+      return res.status(200).json(result);
+    } catch (err: any) {
+      const inputError = /required|invalid|must|cannot|too long/i.test(err?.message || "");
+      return res.status(inputError ? 400 : 500).json({ success: false, message: err.message || "Failed to auto-fix issue" });
+    }
+  },
+
+  /** POST /api/seo-audit/rollback — roll back a previously applied auto-fix */
+  async rollbackFix(req: Request, res: Response) {
+    const body = parseOr400(rollbackSchema, req.body, res);
+    if (!body) return;
+    try {
+      const user = (req as any).user?.email || (req as any).user?.name || "Admin User";
+      const result = await seoAutoFixService.rollbackFix(body.fixLogId, user, body.force);
+      return res.status(200).json(result);
+    } catch (err: any) {
+      const status = err instanceof StaleRollbackError ? 409 : err?.status === 404 || /not found|no longer exists/i.test(err?.message || "") ? 404 : /already|only an applied/i.test(err?.message || "") ? 409 : 500;
+      return res.status(status).json({ success: false, stale: err instanceof StaleRollbackError, message: err.message || "Failed to rollback fix" });
+    }
+  },
+
+  /** GET /api/seo-audit/fix-logs — list auto-fix audit logs with pagination */
+  async getFixLogs(req: Request, res: Response) {
+    try {
+      const page = pageParam(req, "page");
+      const limit = pageParam(req, "limit", 30);
+      const route = typeof req.query.route === "string" ? req.query.route : undefined;
+      const issueType = typeof req.query.issueType === "string" ? req.query.issueType : undefined;
+      const reverted = req.query.reverted !== undefined ? req.query.reverted === "true" : undefined;
+      const result = await seoAutoFixService.getFixLogs({ page, limit, route, issueType, reverted });
+      return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message || "Failed to fetch fix logs" });
+    }
+  },
+
+  /** GET /api/seo-audit/export-excel — multi-tab enterprise Excel (.xlsx) export */
+  async exportExcel(req: Request, res: Response) {
+    try {
+      const buffer = await seoExcelExportService.generateAuditExcel();
+      const fileName = `${getSiteId()}-seo-audit-${new Date().toISOString().split("T")[0]}.xlsx`;
+      res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Length", buffer.length);
+      return res.send(buffer);
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message || "Failed to export Excel report" });
+    }
+  },
+
+  /** POST /api/seo-audit/content-analyze-live — live crawl & AI content / EEAT scan */
+  async contentAnalyzeLive(req: Request, res: Response) {
+    try {
+      const body = parseOr400(contentAnalyzeSchema, req.body, res);
+      if (!body) return;
+      const target = body.url || body.route || "/";
+      const result = await seoAiContentService.scanPageLive(target);
+      return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message || "Failed to analyze live content" });
+    }
+  },
+
+  /** GET /api/seo-audit/site-content-scan — site-wide AI content & image authenticity matrix */
+  async siteContentScan(req: Request, res: Response) {
+    try {
+      const result = await seoAiContentService.scanEntireSiteLive();
+      return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message || "Failed to scan site content" });
+    }
+  },
+
+  /** POST /api/seo-audit/humanize-content — 1-click AI copy humanization with optional DB save */
+  async humanizeContent(req: Request, res: Response) {
+    try {
+      const body = parseOr400(humanizeSchema, req.body, res);
+      if (!body) return;
+      const { text, instructions, targetKeyword, route, saveToDb } = body;
+      const user = (req as any).user?.email || (req as any).user?.name || "Admin User";
+      const result = await seoAiContentService.humanizeContent({
+        text,
+        instructions,
+        targetKeyword,
+        route,
+        saveToDb,
+        user,
+      });
+      return res.status(200).json({ success: true, data: result });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message || "Failed to humanize content" });
+    }
+  },
+
+  /** POST /api/seo-audit/redirect — create or update a 301 redirect */
+  async addRedirect(req: Request, res: Response) {
+    const body = parseOr400(redirectSchema, req.body, res);
+    if (!body) return;
+    try {
+      const user = (req as any).user?.email || (req as any).user?.name || "Admin User";
+      // same code path as the 1-click fix: validates the target, normalises the source, writes the audit log
+      const result = await seoAutoFixService.autoFixPage(body.fromUrl, body.fromUrl, "redirect", { fromUrl: body.fromUrl, toUrl: body.toUrl, statusCode: body.statusCode }, user);
+      const redirect = await Redirect.findOne({ fromUrl: result.fixLog?.newValue?.fromUrl }).lean();
+      return res.status(200).json({ success: true, data: redirect, fixLog: result.fixLog });
+    } catch (err: any) {
+      const inputError = /required|invalid|must|cannot|too long|blocked/i.test(err?.message || "");
+      return res.status(inputError ? 400 : 500).json({ success: false, message: err.message || "Failed to create redirect" });
+    }
+  },
+
+  /** GET /api/seo-audit/redirects — list all redirects */
+  async getRedirects(req: Request, res: Response) {
+    try {
+      const redirects = await Redirect.find().sort({ createdAt: -1 }).lean();
+      return res.status(200).json({ success: true, data: redirects });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message || "Failed to get redirects" });
+    }
+  },
+
+  /** GET /api/seo-audit/schedule — get audit queue status and schedule */
+  async getSchedule(req: Request, res: Response) {
+    try {
+      const status = await seoAuditQueueService.getQueueStatus();
+      return res.status(200).json({ success: true, data: status });
+    } catch (err: any) {
+      return res.status(500).json({ success: false, message: err.message || "Failed to get audit schedule" });
+    }
+  },
+
+  /** POST /api/seo-audit/schedule — update audit schedule & auto-pilot settings */
+  async updateSchedule(req: Request, res: Response) {
+    try {
+      const body = parseOr400(scheduleSchema, req.body, res);
+      if (!body) return;
+      const schedule = await seoAuditQueueService.updateSchedule(body);
+      return res.status(200).json({ success: true, data: schedule });
+    } catch (err: any) {
+      const input = err?.status === 400 || /URL|non-public|resolved|credentials|http/i.test(err?.message || "");
+      return res.status(input ? 400 : 500).json({ success: false, message: err.message || "Failed to update audit schedule" });
+    }
+  },
+};

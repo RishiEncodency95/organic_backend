@@ -7,6 +7,15 @@
  */
 
 export type CheckupStatus = "passed" | "failed" | "warning";
+
+/**
+ * Who can fix a failed check:
+ *   admin     – the admin's "Issues to fix" list changes it (title, description, headings, schema, alt text, redirects ...)
+ *   content   – words on the page: edit the page text in Pages & CMS
+ *   developer – the website's code or build (speed, scripts, markup, sitemap and robots files)
+ *   server    – the host, Cloudflare or DNS (https, www, HSTS, certificates)
+ */
+export type CheckupFixKind = "admin" | "content" | "developer" | "server";
 export type CheckupLevel = "site" | "page";
 export type CheckupSource = "measured" | "crawl" | "derived";
 
@@ -48,6 +57,10 @@ export interface CheckupTest {
   lists?: CheckupList[];
   evidence?: string[];
   fix?: string;
+  /** Who can fix this check (set for every check that is not passed) */
+  fixKind?: CheckupFixKind;
+  /** For fixKind "admin": the kind of issue in the admin's "Issues to fix" list that fixes it */
+  adminIssueType?: string;
   collapsible?: boolean;
 }
 
@@ -73,6 +86,11 @@ export interface CheckupIssue {
   route?: string;
   group?: string;
   evidence?: string[];
+  testId?: string;
+  fixKind?: CheckupFixKind;
+  adminIssueType?: string;
+  /** The admin fixed this after the audit ran: the report shows it as fixed once the next audit sees it */
+  fixedAfterAudit?: { at: string; by?: string };
 }
 
 export interface CheckupCategory {
@@ -107,6 +125,8 @@ export interface PageSpeedSnapshot {
     fcpMs: number | null;
     lcpMs: number | null;
     tbtMs: number | null;
+    /** Lighthouse "Time to Interactive". Absent on PageSpeed runs stored before it was read. */
+    ttiMs?: number | null;
     cls: number | null;
     siMs: number | null;
     ttfbMs: number | null;
@@ -121,6 +141,19 @@ export interface PageSpeedSnapshot {
     otherKb: number | null;
   };
   fieldData: { available: boolean; overall: string | null };
+  /** What Google's Lighthouse run says is slowing the page down (absent on runs stored before it was read) */
+  diagnostics?: {
+    /** The element that is the Largest Contentful Paint (its label or HTML) */
+    lcpElement: string | null;
+    /** How the LCP time is made up: time to first byte, load delay, load time, render delay */
+    lcpBreakdown: Array<{ label: string; ms: number }>;
+    /** Stylesheets / scripts that hold up the first paint, with the time they cost */
+    renderBlocking: Array<{ url: string; ms: number }>;
+    /** JavaScript downloaded but not used on this page */
+    unusedJs: Array<{ url: string; kb: number }>;
+    /** Scripts that keep the main thread busy (the cause of Total Blocking Time) */
+    scriptCpu: Array<{ url: string; ms: number }>;
+  };
 }
 
 /** Per-route summary used by charts & the pages table. */
@@ -175,6 +208,24 @@ export interface LlmPlatformResult {
   }>;
 }
 
+export interface ChecklistEntry {
+  id: number;
+  name: string;
+  type: "ERROR" | "WARNING" | "NOTICE";
+  status: "passed" | "failed" | "warning" | "not_measured";
+  scope: "page" | "site";
+  summary: string;
+  evidence?: string[];
+  section: string;
+  owner: "developer" | "seo";
+  what: string;
+  why: string;
+  fix: string;
+  where: string;
+  affectedPages: string[];
+  affectedTotal: number;
+}
+
 export interface SeoCheckupReportData {
   scope: "site" | "page";
   route: string;
@@ -197,8 +248,11 @@ export interface SeoCheckupReportData {
   inputs: ReportInput[];
   issues: CheckupIssue[];
   groups: CheckupGroup[];
+  /** All 101 site audit checks for this route, in order, with their result. */
+  checklist?: ChecklistEntry[];
   generatedAt: string;
   pageSpeed: PageSpeedSnapshot | null;
+  pageSpeedDesktop?: PageSpeedSnapshot | null;
   routeSummaries: RouteSummary[];
   site: {
     origin: string;

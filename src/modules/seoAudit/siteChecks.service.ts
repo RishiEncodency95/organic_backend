@@ -6,6 +6,7 @@
  */
 
 import * as tls from "tls";
+import * as http from "http";
 import * as http2 from "http2";
 import * as dns from "dns";
 import { promises as dnsPromises } from "dns";
@@ -18,6 +19,8 @@ export interface RobotsCheck {
   rules: Array<{ userAgent: string; allow: string[]; disallow: string[] }>;
   sitemaps: string[];
   error: string | null;
+  /** Lines that are not valid robots.txt (no "field: value", or an unknown field). Absent on older audits. */
+  invalidLines?: string[];
 }
 
 export interface SitemapEntry {
@@ -32,6 +35,9 @@ export interface SitemapCheck {
   url: string | null;
   entries: SitemapEntry[];
   error: string | null;
+  /** Format problems found in the XML. Absent on older audits. */
+  problems?: string[];
+  bytes?: number;
 }
 
 export interface TlsCheck {
@@ -47,6 +53,10 @@ export interface TlsCheck {
   fingerprint256: string | null;
   trusted: boolean;
   error: string | null;
+  /** TLS version and cipher the server negotiated, and whether the certificate is for this host. Absent on older audits. */
+  protocol?: string | null;
+  cipher?: string | null;
+  hostMatches?: boolean;
 }
 
 export interface SecurityHeadersCheck {
@@ -73,7 +83,15 @@ export interface SiteChecks {
     apexStatus: number | null;
     wwwStatus: number | null;
     wwwRedirectsToApex: boolean;
+    /** Why the www address did not answer (for example ENOTFOUND = no DNS record). Absent on older audits. */
+    wwwError?: string | null;
   };
+  /** What http://host/ answers, without following it. Absent on older audits. */
+  httpRedirect?: { status: number | null; location: string | null; error: string | null };
+  /** /llms.txt: whether it exists and what is wrong with its format. Absent on older audits. */
+  llmsTxt?: { status: number | null; exists: boolean; problems: string[] };
+  /** robots.txt rules of other sites that serve scripts, styles or images to this site's pages, by host. Absent on older audits. */
+  externalRobots?: Record<string, RobotsCheck["rules"]>;
   adsTxt: { status: number | null; exists: boolean };
 }
 
@@ -88,12 +106,17 @@ export async function checkRobotsTxt(origin: string): Promise<RobotsCheck> {
     const lines = res.body.split(/\r?\n/);
     const rules: RobotsCheck["rules"] = [];
     const sitemaps: string[] = [];
+    const invalidLines: string[] = [];
+    const KNOWN = new Set(["user-agent", "allow", "disallow", "sitemap", "crawl-delay", "host", "clean-param", "noindex", "request-rate", "visit-time"]);
     let current: { userAgent: string; allow: string[]; disallow: string[] } | null = null;
     for (const raw of lines) {
       const line = raw.split("#")[0].trim();
       if (!line) continue;
       const idx = line.indexOf(":");
-      if (idx === -1) continue;
+      if (idx === -1 || !KNOWN.has(line.slice(0, idx).trim().toLowerCase())) {
+        invalidLines.push(line.slice(0, 80));
+        continue;
+      }
       const key = line.slice(0, idx).trim().toLowerCase();
       const value = line.slice(idx + 1).trim();
       if (key === "user-agent") {
@@ -107,7 +130,7 @@ export async function checkRobotsTxt(origin: string): Promise<RobotsCheck> {
         sitemaps.push(value);
       }
     }
-    return { available: true, url, rules, sitemaps, error: null };
+    return { available: true, url, rules, sitemaps, error: null, invalidLines };
   } catch (err) {
     return {
       available: false,
@@ -153,6 +176,29 @@ function parseSitemapXml(xml: string): ParsedSitemap {
   return { entries, childSitemaps };
 }
 
+/** What is wrong with the sitemap XML itself (not with the pages it lists). Empty when it is valid. */
+export function sitemapProblems(xml: string, entries: SitemapEntry[]): string[] {
+  const problems: string[] = [];
+  if (!/<(urlset|sitemapindex)[\s>]/i.test(xml)) problems.push("No <urlset> or <sitemapindex> root element");
+  const open = (xml.match(/<url>/gi) || []).length;
+  const close = (xml.match(/<\/url>/gi) || []).length;
+  if (open !== close) problems.push(`${open} <url> tags but ${close} closing tags`);
+  const bad = entries.filter((e) => {
+    try {
+      const u = new URL(e.loc);
+      return u.protocol !== "http:" && u.protocol !== "https:";
+    } catch {
+      return true;
+    }
+  });
+  if (bad.length > 0) problems.push(`${bad.length} <loc> value(s) are not valid web addresses, e.g. ${bad[0].loc.slice(0, 60)}`);
+  const badDate = entries.filter((e) => e.lastmod && Number.isNaN(Date.parse(e.lastmod)));
+  if (badDate.length > 0) problems.push(`${badDate.length} <lastmod> value(s) are not valid dates`);
+  const dupes = entries.length - new Set(entries.map((e) => e.loc)).size;
+  if (dupes > 0) problems.push(`${dupes} URL(s) are listed more than once`);
+  return problems;
+}
+
 /** Fetches the XML sitemap (following the robots.txt pointer when present). */
 export async function checkSitemap(origin: string, robots?: RobotsCheck): Promise<SitemapCheck> {
   const candidates = [
@@ -174,7 +220,7 @@ export async function checkSitemap(origin: string, robots?: RobotsCheck): Promis
           }
         } catch { /* skip unreachable child sitemap */ }
       }
-      if (entries.length > 0) return { available: true, url, entries, error: null };
+      if (entries.length > 0) return { available: true, url, entries, error: null, problems: sitemapProblems(res.body, entries), bytes: Buffer.byteLength(res.body) };
     } catch { /* try next candidate */ }
   }
   return { available: false, url: null, entries: [], error: "No reachable sitemap.xml found" };
@@ -189,6 +235,7 @@ export function checkTls(host: string, port = 443, timeoutMs = 10_000): Promise<
         const cert = socket.getPeerCertificate(true) as unknown as Record<string, any>;
         const authorized = (socket as tls.TLSSocket & { authorized?: boolean }).authorized === true;
         const validTo = cert?.valid_to || null;
+        const hostMismatch = tls.checkServerIdentity(host, cert as unknown as tls.PeerCertificate);
         const daysRemaining = validTo
           ? Math.round((new Date(validTo).getTime() - Date.now()) / 86_400_000)
           : null;
@@ -204,6 +251,9 @@ export function checkTls(host: string, port = 443, timeoutMs = 10_000): Promise<
           sigalg: cert?.signatureAlgorithm ?? null,
           san: cert?.subjectaltname ?? null,
           fingerprint256: cert?.fingerprint256 ?? null,
+          protocol: socket.getProtocol() ?? null,
+          cipher: socket.getCipher()?.name ?? null,
+          hostMatches: hostMismatch === undefined,
           trusted: authorized,
           error: authorized ? null : String((socket as tls.TLSSocket & { authorizationError?: Error }).authorizationError ?? "untrusted"),
         });
@@ -314,13 +364,20 @@ export async function checkCustom404(origin: string): Promise<{ status: number |
   }
 }
 
-/** Compares apex and www responses for canonicalization behaviour. */
-export async function checkCanonicalization(host: string): Promise<{ apexStatus: number | null; wwwStatus: number | null; wwwRedirectsToApex: boolean }> {
-  const apex = `https://${host}/`;
-  const www = `https://www.${host}/`;
+const bare = (host: string) => host.toLowerCase().replace(/^www\./, "");
+
+/**
+ * Compares the apex and the www address. "www does not answer" is reported as exactly that (with the reason);
+ * it is never counted as "redirects to the apex".
+ */
+export async function checkCanonicalization(host: string): Promise<{ apexStatus: number | null; wwwStatus: number | null; wwwRedirectsToApex: boolean; wwwError: string | null }> {
+  const cleanHost = bare(host);
+  const apex = `https://${cleanHost}/`;
+  const www = `https://www.${cleanHost}/`;
   let apexStatus: number | null = null;
   let wwwStatus: number | null = null;
   let wwwRedirectsToApex = false;
+  let wwwError: string | null = null;
   try {
     const res = await fetchWithTiming(apex, { acceptEncoding: "identity" });
     apexStatus = res.status;
@@ -328,9 +385,63 @@ export async function checkCanonicalization(host: string): Promise<{ apexStatus:
   try {
     const res = await fetchWithTiming(www, { acceptEncoding: "identity" });
     wwwStatus = res.status;
-    wwwRedirectsToApex = res.finalUrl.replace(/\/$/, "") === apex.replace(/\/$/, "") || res.redirects.some((r) => r.url.startsWith(www));
-  } catch { /* leave null */ }
-  return { apexStatus, wwwStatus, wwwRedirectsToApex };
+    // It redirects only when it was really sent on to the apex address.
+    wwwRedirectsToApex = res.redirects.length > 0 && bare(new URL(res.finalUrl).hostname) === cleanHost && !new URL(res.finalUrl).hostname.startsWith("www.");
+  } catch (err) {
+    wwwError = (err as NodeJS.ErrnoException)?.code || (err instanceof Error ? err.message : String(err));
+  }
+  return { apexStatus, wwwStatus, wwwRedirectsToApex, wwwError };
+}
+
+/** Asks http://host/ once and reports the answer without following it, to see how the insecure address is handled. */
+export function checkHttpRedirect(host: string, port = 80): Promise<{ status: number | null; location: string | null; error: string | null }> {
+  return new Promise((resolve) => {
+    const req = http.request(
+      { hostname: host, port, path: "/", method: "GET", headers: { "User-Agent": "Mozilla/5.0 (compatible; SeoAudit)", "Accept-Encoding": "identity", Connection: "close" }, timeout: 10_000 },
+      (res) => {
+        const location = res.headers.location ? String(res.headers.location) : null;
+        res.destroy();
+        resolve({ status: res.statusCode ?? null, location, error: null });
+      },
+    );
+    req.on("timeout", () => req.destroy(new Error("timeout")));
+    req.on("error", (err: NodeJS.ErrnoException) => resolve({ status: null, location: null, error: err.code || err.message }));
+    req.end();
+  });
+}
+
+/** robots.txt rules of other hosts (at most 8), to see whether they block files this site loads from them. */
+export async function checkExternalRobots(hosts: string[]): Promise<Record<string, RobotsCheck["rules"]>> {
+  const result: Record<string, RobotsCheck["rules"]> = {};
+  await Promise.all(
+    Array.from(new Set(hosts))
+      .slice(0, 8)
+      .map(async (host) => {
+        const robots = await checkRobotsTxt(`https://${host}`);
+        result[host] = robots.available ? robots.rules : [];
+      }),
+  );
+  return result;
+}
+
+/** Fetches /llms.txt and checks it against the llms.txt format (a markdown file: H1 title first, then links). */
+export async function checkLlmsTxt(origin: string): Promise<{ status: number | null; exists: boolean; problems: string[] }> {
+  try {
+    const res = await fetchWithTiming(`${origin}/llms.txt`, { acceptEncoding: "identity" });
+    if (res.status !== 200) return { status: res.status, exists: false, problems: [] };
+    const problems: string[] = [];
+    const type = String(res.headers["content-type"] || "");
+    if (/text\/html/i.test(type)) problems.push("Served as an HTML page, not as plain text or markdown");
+    const lines = res.body.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) problems.push("The file is empty");
+    else if (!/^#\s+\S/.test(lines[0])) problems.push("The first line must be a '# Title' heading");
+    if (lines.length > 0 && !/\[[^\]]+\]\((https?:\/\/|\/)[^)]+\)/.test(res.body)) problems.push("No markdown links ([text](url)) to the site's key pages");
+    const broken = lines.filter((l) => /^[-*]\s+\[[^\]]*\]\([^)]*$/.test(l) || /^[-*]\s+\[[^\]]*$/.test(l));
+    if (broken.length > 0) problems.push(`${broken.length} link line(s) are malformed, e.g. ${broken[0].slice(0, 60)}`);
+    return { status: 200, exists: true, problems };
+  } catch {
+    return { status: null, exists: false, problems: [] };
+  }
 }
 
 /** Checks for a served ads.txt (absent is correct when no ad inventory is sold). */
@@ -347,7 +458,7 @@ export async function checkAdsTxt(origin: string): Promise<{ status: number | nu
 export async function runSiteChecks(origin: string): Promise<SiteChecks> {
   const host = new URL(origin).hostname;
   const robotsTxt = await checkRobotsTxt(origin);
-  const [sitemap, tlsCheck, http2Check, headers, spf, notFoundPage, canonicalization, adsTxt] = await Promise.all([
+  const [sitemap, tlsCheck, http2Check, headers, spf, notFoundPage, canonicalization, adsTxt, httpRedirect, llmsTxt] = await Promise.all([
     checkSitemap(origin, robotsTxt),
     checkTls(host),
     checkHttp2(origin),
@@ -356,6 +467,8 @@ export async function runSiteChecks(origin: string): Promise<SiteChecks> {
     checkCustom404(origin),
     checkCanonicalization(host),
     checkAdsTxt(origin),
+    origin.startsWith("https://") ? checkHttpRedirect(host) : Promise.resolve(undefined),
+    checkLlmsTxt(origin),
   ]);
   return {
     fetchedAt: new Date().toISOString(),
@@ -369,5 +482,7 @@ export async function runSiteChecks(origin: string): Promise<SiteChecks> {
     notFoundPage,
     canonicalization,
     adsTxt,
+    ...(httpRedirect ? { httpRedirect } : {}),
+    llmsTxt,
   };
 }

@@ -21,6 +21,7 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   OPENAI_MODEL: z.string().default("gpt-5.4-mini"),
   GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
 
   // Website chatbot: comma-separated origins allowed to call /api/chat (empty = any)
   ALLOWED_ORIGINS: z.string().default(""),
@@ -39,6 +40,13 @@ const envSchema = z.object({
   FROM_NAME: z.string().optional(),
   // SEO & Google Keys
   PAGESPEED_API_KEY: z.string().optional(),
+  PSI_API_KEY: z.string().optional(),
+  GOOGLE_CSE_API_KEY: z.string().optional(),
+  GOOGLE_CSE_ID: z.string().optional(),
+  API_PUBLIC_URL: z.string().optional(),
+  WEBSITE_BUILD_HOOK_URL: z.string().optional(),
+  SEO_DEFAULT_OG_IMAGE: z.string().optional(),
+  SEO_WEBHOOK_API_KEY: z.string().optional(),
   GA4_PROPERTY_ID: z.string().optional(),
   SEARCH_CONSOLE_SITE_URL: z.string().optional(),
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional(),

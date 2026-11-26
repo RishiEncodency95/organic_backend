@@ -11,26 +11,18 @@
  */
 
 import type { LlmPlatformResult } from "./types";
-
-const BRAND_TERMS = ["bharat organic expo", "bharatorganicexpo.com"];
-
-const DEFAULT_QUERIES = [
-  "What are the top organic food trade fairs in India in 2027?",
-  "Which exhibition should a certified organic food brand attend in New Delhi in 2027?",
-  "Best B2B organic and wellness expo in India for exhibitors and buyers?",
-];
+import { getBrandTerms, getLlmQueries, getSiteHost } from "../../config/seoSite";
 
 function detectMention(text: string): { mentioned: boolean; citedDomain: boolean; excerpt: string } {
   const lower = text.toLowerCase();
-  const mentioned = BRAND_TERMS.some((term) => lower.includes(term));
-  const citedDomain = lower.includes("bharatorganicexpo.com");
-  let excerpt = "";
-  const idx = lower.indexOf("bharat organic expo");
-  const domIdx = lower.indexOf("bharatorganicexpo");
-  const at = idx >= 0 ? idx : domIdx;
-  if (at >= 0) {
-    excerpt = text.slice(Math.max(0, at - 80), at + 160).trim();
-  }
+  const terms = getBrandTerms();
+  const domain = getSiteHost().replace(/^www\./, "").toLowerCase();
+  const mentioned = terms.some((term) => lower.includes(term));
+  const citedDomain = lower.includes(domain);
+  // Show the sentence around the first brand term (or the domain) that appears.
+  const positions = [...terms, domain].map((term) => lower.indexOf(term)).filter((at) => at >= 0);
+  const at = positions.length ? Math.min(...positions) : -1;
+  const excerpt = at >= 0 ? text.slice(Math.max(0, at - 80), at + 160).trim() : "";
   return { mentioned, citedDomain, excerpt };
 }
 
@@ -47,7 +39,7 @@ async function testOpenAi(queries: string[], model = "gpt-4o-mini"): Promise<Llm
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: "You are a helpful assistant answering industry research questions. Mention specific real events and their websites where relevant." },
+          { role: "system", content: "You are a helpful assistant answering industry research questions. Mention specific real businesses or service providers and their websites where relevant." },
           { role: "user", content: query },
         ],
         temperature: 0.3,
@@ -72,10 +64,10 @@ async function testGemini(queries: string[], model = "gemini-2.5-flash"): Promis
   const results: LlmPlatformResult["results"] = [];
   for (const query of queries) {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: query }] }],
           generationConfig: { temperature: 0.3 },
@@ -138,7 +130,7 @@ async function testPerplexity(queries: string[], model = "sonar"): Promise<LlmPl
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: "Answer with specific real events and cite their websites." },
+          { role: "system", content: "Answer with specific real businesses or service providers and cite their websites." },
           { role: "user", content: query },
         ],
         temperature: 0.2,
@@ -156,7 +148,7 @@ async function testPerplexity(queries: string[], model = "sonar"): Promise<LlmPl
 }
 
 /** Runs live brand-mention probes across every configured assistant. */
-export async function runLlmVisibility(queries: string[] = DEFAULT_QUERIES): Promise<LlmPlatformResult[]> {
+export async function runLlmVisibility(queries: string[] = getLlmQueries()): Promise<LlmPlatformResult[]> {
   const platforms = await Promise.all([
     testOpenAi(queries),
     testGemini(queries),
