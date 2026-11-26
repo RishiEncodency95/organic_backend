@@ -98,10 +98,10 @@ export async function loadSections(route: string): Promise<LoadedPage> {
   if (!key) throw new ContentBlockError(`${route} has no editable text in the CMS (its text is in the website's code).`, 404);
   if (key === "home2") {
     const page: any = await home2Service.getPage();
-    return { kind: "home2", key, sections: page.sections ?? {} };
+    return { kind: "home2", key, sections: page?.sections ?? {} };
   }
   const page: any = await sitePagesService.getPage(key);
-  return { kind: "page", key, sections: page.sections ?? {} };
+  return { kind: "page", key, sections: page?.sections ?? {} };
 }
 
 /** Every text field of the page that is real copy, in page order. Switched-off sections are left out. */
