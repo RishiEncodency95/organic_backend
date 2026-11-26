@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { Admin } from "../../models/Admin.model";
 import { z } from "zod";
 import { seoAuditQueueService, consumeReportDownload } from "./seoAuditQueue.service";
 import { seoExcelExportService } from "./seoExcelExport.service";
@@ -14,7 +15,16 @@ import { applyBlock, humanizeBlock, listFlaggedBlocks } from "./contentBlocks.se
 import { ContentBlockError } from "./contentBlocksStore";
 import { InsightError, checkPageImages, getSocial, headingsReport, keywordsForUrl, saveSocial } from "./pageInsights.service";
 
-const actor = (req: Request): string => (req as any).user?.email || (req as any).user?.name || "Admin User";
+const actor = async (req: Request): Promise<string> => {
+  const u = (req as any).user;
+  if (u?.name) return u.name;
+  if (u?.id) {
+    const admin = await Admin.findById(u.id).select("name email").lean().catch(() => null);
+    if (admin?.name) return admin.name;
+    if (admin?.email) return admin.email;
+  }
+  return u?.email || "Admin User";
+};
 const fail = (res: Response, err: any, fallback: string, status = 500) =>
   res.status(status).json({ success: false, message: err?.message || fallback });
 
@@ -54,7 +64,7 @@ export const seoAuditExtrasController = {
     if (!b) return;
     try {
       const { route, ...fields } = b;
-      const out = await saveSocial(route, fields, actor(req));
+      const out = await saveSocial(route, fields, await actor(req));
       return res.json({ success: true, data: { ...out, social: await getSocial(route) } });
     } catch (err) {
       return insightFail(res, err, "Failed to save the share tags");
@@ -83,7 +93,7 @@ export const seoAuditExtrasController = {
   async trigger(req: Request, res: Response) {
     if (!parseOr400(triggerSchema, req.body, res)) return;
     try {
-      const r = await seoAuditQueueService.triggerAudit({ trigger: "manual", requestedBy: actor(req) });
+      const r = await seoAuditQueueService.triggerAudit({ trigger: "manual", requestedBy: await actor(req) });
       if (r.alreadyRunning) return res.status(409).json({ success: false, alreadyRunning: true, activeJobId: r.activeJobId ?? null, message: "An audit or auto-fix run is already in progress." });
       return res.status(202).json({ success: true, data: { jobId: r.jobId, method: r.method } });
     } catch (err) {
@@ -96,7 +106,7 @@ export const seoAuditExtrasController = {
     const body = parseOr400(autoFixAllSchema, req.body, res);
     if (!body) return;
     try {
-      const r = await seoAuditQueueService.triggerAutoFixAll({ requestedBy: actor(req), maxPages: body.maxPages });
+      const r = await seoAuditQueueService.triggerAutoFixAll({ requestedBy: await actor(req), maxPages: body.maxPages });
       if (r.alreadyRunning) return res.status(409).json({ success: false, alreadyRunning: true, activeJobId: r.activeJobId ?? null, message: "An audit or auto-fix run is already in progress." });
       return res.status(202).json({ success: true, data: { jobId: r.jobId, kind: r.kind, method: r.method } });
     } catch (err) {
@@ -118,7 +128,7 @@ export const seoAuditExtrasController = {
     const body = parseOr400(approvalDecisionSchema, req.body, res);
     if (!body) return;
     try {
-      return res.json({ success: true, data: await seoAutoPilotService.decide(body.proposalId, body.approveIds, body.rejectIds, actor(req)) });
+      return res.json({ success: true, data: await seoAutoPilotService.decide(body.proposalId, body.approveIds, body.rejectIds, await actor(req)) });
     } catch (err) {
       if (err instanceof ProposalError) return res.status(err.status).json({ success: false, message: err.message });
       return fail(res, err, "Failed to apply the decision");
@@ -211,7 +221,7 @@ export const seoAuditExtrasController = {
     const b = parseOr400(z.object({ status: z.enum(["applied", "suggested", "dismissed"]) }), req.body, res);
     if (!p || !b) return;
     try {
-      const doc = await internalLinkingService.setStatus(p.id, b.status, actor(req));
+      const doc = await internalLinkingService.setStatus(p.id, b.status, await actor(req));
       if (!doc) return res.status(404).json({ success: false, message: "Suggestion not found" });
       return res.json({ success: true, data: doc });
     } catch (err) {
@@ -229,7 +239,7 @@ export const seoAuditExtrasController = {
   },
   async notFoundAutoRedirect(req: Request, res: Response) {
     try {
-      return res.json({ success: true, data: await notFoundService.autoRedirectOpen(actor(req)) });
+      return res.json({ success: true, data: await notFoundService.autoRedirectOpen(await actor(req)) });
     } catch (err) {
       return fail(res, err, "Failed to create redirects");
     }
@@ -261,7 +271,7 @@ export const seoAuditExtrasController = {
     const b = parseOr400(outreachMentionSchema, req.body, res);
     if (!b) return;
     try {
-      return res.json({ success: true, data: await outreachService.createDraft({ url: b.url }, actor(req)) });
+      return res.json({ success: true, data: await outreachService.createDraft({ url: b.url }, await actor(req)) });
     } catch (err) {
       return fail(res, err, "Failed to write the draft", 502);
     }
@@ -311,7 +321,7 @@ export const seoAuditExtrasController = {
     const b = parseOr400(applyBlockSchema, req.body, res);
     if (!b) return;
     try {
-      const r = await applyBlock({ ...b, user: actor(req) });
+      const r = await applyBlock({ ...b, user: await actor(req) });
       return res.json({ success: true, message: "Saved to the website text.", data: r });
     } catch (err: any) {
       return fail(res, err, "Failed to save the text", err instanceof ContentBlockError ? err.status : 500);

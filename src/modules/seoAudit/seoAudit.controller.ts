@@ -1,4 +1,16 @@
 import { Request, Response } from "express";
+import { Admin } from "../../models/Admin.model";
+
+async function resolveAdminName(req: Request): Promise<string> {
+  const u = (req as any).user;
+  if (u?.name) return u.name;
+  if (u?.id) {
+    const admin = await Admin.findById(u.id).select("name email").lean().catch(() => null);
+    if (admin?.name) return admin.name;
+    if (admin?.email) return admin.email;
+  }
+  return u?.email || "Admin User";
+}
 import SeoAuditSnapshot from "../../models/seoAudit.model";
 import { crawlRoutes } from "./crawler.service";
 import { checkLinks, linkStatusesFromList, linkStatusesToList } from "./linkCheck.service";
@@ -561,7 +573,7 @@ export const seoAuditController = {
     const body = parseOr400(autoFixSchema, req.body, res);
     if (!body) return;
     try {
-      const user = (req as any).user?.email || (req as any).user?.name || "Admin User";
+      const user = await resolveAdminName(req);
       const result = await seoAutoFixService.autoFixPage(body.pageUrl, body.route, body.issueType, body.options, user, { dryRun: body.dryRun });
       return res.status(200).json(result);
     } catch (err: any) {
@@ -575,7 +587,7 @@ export const seoAuditController = {
     const body = parseOr400(rollbackSchema, req.body, res);
     if (!body) return;
     try {
-      const user = (req as any).user?.email || (req as any).user?.name || "Admin User";
+      const user = await resolveAdminName(req);
       const result = await seoAutoFixService.rollbackFix(body.fixLogId, user, body.force);
       return res.status(200).json(result);
     } catch (err: any) {
@@ -642,7 +654,7 @@ export const seoAuditController = {
       const body = parseOr400(humanizeSchema, req.body, res);
       if (!body) return;
       const { text, instructions, targetKeyword, route, saveToDb } = body;
-      const user = (req as any).user?.email || (req as any).user?.name || "Admin User";
+      const user = await resolveAdminName(req);
       const result = await seoAiContentService.humanizeContent({
         text,
         instructions,
@@ -662,7 +674,7 @@ export const seoAuditController = {
     const body = parseOr400(redirectSchema, req.body, res);
     if (!body) return;
     try {
-      const user = (req as any).user?.email || (req as any).user?.name || "Admin User";
+      const user = await resolveAdminName(req);
       // same code path as the 1-click fix: validates the target, normalises the source, writes the audit log
       const result = await seoAutoFixService.autoFixPage(body.fromUrl, body.fromUrl, "redirect", { fromUrl: body.fromUrl, toUrl: body.toUrl, statusCode: body.statusCode }, user);
       const redirect = await Redirect.findOne({ fromUrl: result.fixLog?.newValue?.fromUrl }).lean();
