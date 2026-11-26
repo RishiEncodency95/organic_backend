@@ -873,6 +873,10 @@ export const seoAuditQueueService = {
   /** The job that is running now (if any), so a page can attach to it after a reload or a 409 */
   async getActiveJob(): Promise<{ jobId: string; kind: JobKind } | null> {
     const cur = activeLocal ?? (await readActive());
+    if (cur?.id?.startsWith("local-") && !localJobs.has(cur.id) && !isAuditInProgress) {
+      await forceUnlockAudit();
+      return null;
+    }
     return cur && cur.id ? { jobId: cur.id, kind: cur.kind } : null;
   },
 
@@ -933,10 +937,18 @@ interface EnqueueResult {
 async function enqueueJob(kind: JobKind, name: string, options: Record<string, unknown>): Promise<EnqueueResult> {
   if (await isAuditRunningAnywhere()) {
     const cur = activeLocal ?? (await readActive());
-    return { triggered: false, alreadyRunning: true, activeJobId: cur?.id || undefined, kind: cur?.kind };
+    if (cur?.id?.startsWith("local-") && !localJobs.has(cur.id) && !isAuditInProgress) {
+      await forceUnlockAudit();
+    } else {
+      return { triggered: false, alreadyRunning: true, activeJobId: cur?.id || undefined, kind: cur?.kind };
+    }
   }
   const id = isUsingBullMq && auditQueue ? `${kind}-${randomUUID()}` : `local-${randomUUID()}`;
-  const existing = await claimActive(kind, id);
+  let existing = await claimActive(kind, id);
+  if (existing?.id?.startsWith("local-") && !localJobs.has(existing.id) && !isAuditInProgress) {
+    await forceUnlockAudit();
+    existing = await claimActive(kind, id);
+  }
   if (existing) return { triggered: false, alreadyRunning: true, activeJobId: existing.id || undefined, kind: existing.kind };
 
   if (isUsingBullMq && auditQueue) {
