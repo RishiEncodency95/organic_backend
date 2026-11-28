@@ -411,11 +411,23 @@ async function fetchCloudflareAnalytics(range: ReturnType<typeof resolveRange>) 
   };
 }
 
+let lastGa4Error: string | null = null;
+
 async function fetchGa4Analytics(range: ReturnType<typeof resolveRange>) {
+  lastGa4Error = null;
   const propertyId = env.GA4_PROPERTY_ID?.trim();
-  if (!propertyId) return null;
-  const token = await getGoogleToken("https://www.googleapis.com/auth/analytics.readonly").catch(() => null);
-  if (!token) return null;
+  if (!propertyId) {
+    lastGa4Error = "GA4_PROPERTY_ID missing";
+    return null;
+  }
+  const token = await getGoogleToken("https://www.googleapis.com/auth/analytics.readonly").catch((err) => {
+    lastGa4Error = err instanceof Error ? err.message : "GA4 token error";
+    return null;
+  });
+  if (!token) {
+    lastGa4Error = lastGa4Error || "GA4 token unavailable";
+    return null;
+  }
 
   if (range.key === "1h") {
     const rtRes = await fetch(
@@ -519,7 +531,11 @@ async function fetchGa4Analytics(range: ReturnType<typeof resolveRange>) {
     }),
   ]);
 
-  if (!sumRes.ok) return null;
+  if (!sumRes.ok) {
+    const errText = await sumRes.text().catch(() => "");
+    lastGa4Error = `GA4 HTTP ${sumRes.status}: ${errText.slice(0, 120)}`;
+    return null;
+  }
   const sumJson = (await sumRes.json()) as any;
   const serJson = serRes.ok ? ((await serRes.json()) as any) : {};
   const pageJson = pageRes.ok ? ((await pageRes.json()) as any) : {};
@@ -1269,9 +1285,14 @@ export async function buildDashboardOverview(
   const cfOrGa = async () => {
     const cf = await fetchCloudflareAnalytics(range).catch(() => null);
     if (cf) return cf;
-    const ga = await fetchGa4Analytics(range).catch(() => null);
+    const ga = await fetchGa4Analytics(range).catch((err) => {
+      lastGa4Error = err instanceof Error ? err.message : "GA4 request failed";
+      return null;
+    });
     if (ga) return ga;
-    return fetchTrackerAnalytics(range);
+    const tracker = await fetchTrackerAnalytics(range);
+    if (lastGa4Error) tracker.message = `${tracker.message} · GA4: ${lastGa4Error}`;
+    return tracker;
   };
 
   const [analytics, searchConsole, pageSpeed] = await Promise.all([
