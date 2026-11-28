@@ -49,8 +49,18 @@ const envSchema = z.object({
   SEO_WEBHOOK_API_KEY: z.string().optional(),
   GA4_PROPERTY_ID: z.string().optional(),
   SEARCH_CONSOLE_SITE_URL: z.string().optional(),
+  GSC_SITE_URL: z.string().optional(),
   GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional(),
   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: z.string().optional(),
+  GSC_SERVICE_ACCOUNT_JSON: z.string().optional(),
+  GSC_OAUTH_CLIENT_ID: z.string().optional(),
+  GSC_OAUTH_CLIENT_SECRET: z.string().optional(),
+  GSC_OAUTH_REFRESH_TOKEN: z.string().optional(),
+  CLOUDFLARE_API_TOKEN: z.string().optional(),
+  CLOUDFLARE_ZONE_ID: z.string().optional(),
+  WEBSITE_URL: z.string().optional(),
+  LIVE_SITE_URL: z.string().optional(),
+  NEXT_PUBLIC_SITE_URL: z.string().optional(),
 
   // Website cache refresh after admin saves (frontend app/api/revalidate). Both optional:
   // without them the website picks up admin changes within its 60s cache window.
